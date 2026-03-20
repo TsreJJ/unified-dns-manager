@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified DNS Manager</title>
+    <style>
+        /* ========== 工业风基础 ========== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #242424;
+            --bg-tertiary: #2e2e2e;
+            --bg-input: #1e1e1e;
+            --border: #3a3a3a;
+            --border-highlight: #555;
+            --text-primary: #d4d4d4;
+            --text-secondary: #888;
+            --text-muted: #666;
+            --accent: #c8a520;
+            --accent-dim: #8a7218;
+            --danger: #b33;
+            --danger-dim: #822;
+            --success: #3a7d3a;
+            --info: #2a5a8a;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            --font-sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+            --nav-height: 52px;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            font-size: 14px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* ========== 固定顶栏 ========== */
+        nav.top-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1000;
+            height: var(--nav-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
+        }
+        nav.top-bar .brand {
+            display: flex; align-items: center; gap: .7rem;
+        }
+        nav.top-bar .brand-icon {
+            width: 28px; height: 28px;
+            border: 2px solid var(--accent);
+            border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 14px; color: var(--accent);
+            font-family: var(--font-mono);
+        }
+        nav.top-bar h1 {
+            font-family: var(--font-mono);
+            font-size: .95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: .5px;
+        }
+        nav.top-bar .ver {
+            font-size: .7rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            margin-left: .3rem;
+        }
+
+        /* body 偏移 */
+        body { padding-top: var(--nav-height); }
+
+        /* ========== 通用组件 ========== */
+        .container { max-width: 1140px; margin: 0 auto; padding: 1.2rem 1.5rem; }
+
+        /* 按钮 */
+        button, .btn {
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            font-weight: 600;
+            padding: .4rem .9rem;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all .15s;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+        button:hover { border-color: var(--accent); color: var(--accent); }
+        button:active { transform: scale(.97); }
+        button.primary {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        button.primary:hover { background: var(--accent); }
+        button.danger { border-color: var(--danger); color: #d66; }
+        button.danger:hover { background: var(--danger); color: #fff; }
+        button.ghost {
+            background: transparent; border-color: transparent;
+            padding: .3rem .5rem; text-transform: none;
+        }
+        button.ghost:hover { border-color: var(--border); }
+        button.nav-btn {
+            font-size: .7rem; padding: .25rem .7rem;
+            border-color: var(--text-muted); color: var(--text-muted);
+        }
+        button.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+        button[aria-busy="true"] { opacity: .6; pointer-events: none; }
+
+        /* 输入框 */
+        input, select {
+            font-family: var(--font-mono);
+            font-size: .82rem;
+            padding: .45rem .7rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color .15s;
+        }
+        input:focus, select:focus { border-color: var(--accent); }
+        input::placeholder { color: var(--text-muted); }
+        select { cursor: pointer; }
+        select option { background: var(--bg-secondary); }
+        label {
+            display: block;
+            font-size: .72rem;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            margin-bottom: .25rem;
+        }
+
+        /* ========== 登录 ========== */
+        #login-section {
+            max-width: 400px;
+            margin: 4rem auto;
+        }
+        .login-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2rem;
+        }
+        .login-card h3 {
+            font-family: var(--font-mono);
+            font-size: .9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            padding-bottom: .6rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .login-card input {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .login-card button {
+            width: 100%;
+        }
+
+        /* ========== 查询栏 ========== */
+        .query-bar {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            align-items: end;
+            padding: .8rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .query-bar .domain-input { flex: 1; min-width: 200px; }
+        .query-bar select { width: 120px; }
+        .query-bar .filter-rr { width: 120px; }
+        .query-bar .provider-sel { width: 130px; }
+
+        /* ========== 域名清洗提示 ========== */
+        .domain-hint {
+            font-family: var(--font-mono);
+            font-size: .75rem;
+            color: var(--accent);
+            padding: .35rem .8rem;
+            margin: -.5rem 0 .6rem;
+            background: rgba(200,165,32,.08);
+            border: 1px solid rgba(200,165,32,.2);
+            border-radius: 3px;
+        }
+        .domain-hint .hint-arrow { color: var(--text-muted); margin: 0 .4rem; }
+        .domain-hint .hint-root { font-weight: 700; }
+        .domain-hint .hint-rr { color: var(--text-secondary); }
+
+        /* ========== 平台检测 ========== */
+        #detect-info {
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            color: var(--text-secondary);
+            padding: .5rem 0;
+        }
+        .provider-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 2px;
+            font-size: .72rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: #fff;
+            margin-right: .5rem;
+        }
+        .provider-badge.aliyun { background: #b45000; }
+        .provider-badge.cloudflare { background: #a05510; }
+        .provider-badge.aws { background: #1a3a5c; }
+        .provider-badge.cdnw { background: #005a9e; }
+        .provider-badge.unknown { background: #555; }
+
+        /* ========== 统计 ========== */
+        .stats {
+            display: flex; gap: 1.5rem;
+            font-family: var(--font-mono);
+            font-size: .75rem;
+            color: var(--text-muted);
+            padding: .3rem 0 .6rem;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+        }
+
+        /* ========== 数据表 ========== */
+        .table-wrap {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: .82rem;
+        }
+        thead {
+            background: var(--bg-tertiary);
+        }
+        th {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--text-secondary);
+            padding: .6rem .8rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        td {
+            padding: .5rem .8rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: rgba(200,165,32,.04); }
+        td.actions { white-space: nowrap; }
+        td.actions button {
+            font-size: .68rem;
+            padding: .2rem .5rem;
+            margin: 0 2px;
+        }
+        .value-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .value-cell:hover { white-space: normal; word-break: break-all; }
+        .rr-cell { color: var(--accent); font-weight: 600; }
+        .type-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border: 1px solid var(--border-highlight);
+            border-radius: 2px;
+            font-size: .7rem;
+            color: var(--text-secondary);
+        }
+        .status-on { color: var(--success); }
+        .status-off { color: var(--danger); }
+        .empty-msg {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2rem;
+            font-size: .82rem;
+        }
+
+        /* ========== Dialog 弹窗 ========== */
+        dialog {
+            max-width: 520px;
+            width: 92vw;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            padding: 0;
+        }
+        dialog::backdrop { background: rgba(0,0,0,.65); }
+        .dialog-inner { padding: 1.5rem; }
+        .dialog-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: .8rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .dialog-header h3 {
+            font-family: var(--font-mono);
+            font-size: .85rem;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--accent);
+        }
+        .dialog-header .close-btn {
+            background: none; border: none;
+            font-size: 1.3rem; color: var(--text-muted);
+            cursor: pointer; padding: 0; line-height: 1;
+        }
+        .dialog-header .close-btn:hover { color: var(--text-primary); }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .8rem;
+        }
+        .form-grid .full { grid-column: 1 / -1; }
+        .form-grid input, .form-grid select { width: 100%; }
+        .dialog-footer {
+            display: flex; gap: .5rem; justify-content: flex-end;
+            margin-top: 1.2rem;
+            padding-top: .8rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* 删除确认 */
+        .delete-msg {
+            font-size: .85rem;
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: .5rem 0;
+        }
+        .delete-msg strong { color: #d66; }
+
+        /* ========== Toast ========== */
+        .toast-container {
+            position: fixed;
+            top: calc(var(--nav-height) + .8rem);
+            right: 1rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: .4rem;
+        }
+        .toast {
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            padding: .5rem 1rem;
+            border-radius: 3px;
+            border-left: 3px solid;
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            animation: slideIn .2s ease-out;
+            max-width: 380px;
+            word-break: break-word;
+        }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.info { border-left-color: var(--info); }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ========== Loading ========== */
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+            vertical-align: middle;
+            margin-right: .4rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ========== 警告条纹装饰 ========== */
+        .hazard-stripe {
+            height: 3px;
+            background: repeating-linear-gradient(
+                -45deg,
+                var(--accent) 0, var(--accent) 8px,
+                transparent 8px, transparent 16px
+            );
+        }
+    </style>
+</head>
+<body>
+
+<!-- 顶部警示条纹 -->
+<div class="hazard-stripe" style="position:fixed;top:0;left:0;right:0;z-index:1001;"></div>
+
+<!-- 固定导航栏 -->
+<nav class="top-bar" style="top:3px;">
+    <div class="brand">
+        <div class="brand-icon">D</div>
+        <div>
+            <h1>UNIFIED DNS MANAGER</h1>
+        </div>
+        <span class="ver">v1.1.0</span>
+    </div>
+    <div id="auth-status"></div>
+</nav>
+
+<div class="container">
+    <!-- 登录 -->
+    <section id="login-section">
+        <div class="login-card">
+            <h3>// Authentication</h3>
+            <label for="token-input">Bearer Token</label>
+            <input type="password" id="token-input" placeholder="Enter WEB_AUTH_TOKEN">
+            <button class="primary" style="margin-top:.5rem;" id="login-btn" onclick="doLogin()">AUTHENTICATE</button>
+        </div>
+    </section>
+
+    <!-- 主界面 -->
+    <section id="main-section" style="display:none;">
+        <!-- 查询栏 -->
+        <div class="query-bar">
+            <input type="text" class="domain-input" id="domain-input"
+                   placeholder="Domain (e.g. test.example.com)"
+                   onkeydown="if(event.key==='Enter')queryRecords()"
+                   oninput="onDomainInput()">
+            <select id="filter-type">
+                <option value="">ALL TYPE</option>
+                <option>A</option><option>AAAA</option><option>CNAME</option>
+                <option>MX</option><option>TXT</option><option>NS</option><option>SRV</option>
+            </select>
+            <input type="text" id="filter-rr" class="filter-rr" placeholder="RR Filter">
+            <select id="force-provider" class="provider-sel">
+                <option value="">AUTO DETECT</option>
+            </select>
+            <button class="primary" onclick="queryRecords()">QUERY</button>
+            <button onclick="openAddDialog()">+ ADD</button>
+        </div>
+        <!-- 域名清洗提示 -->
+        <div id="domain-hint" class="domain-hint" style="display:none;"></div>
+
+        <!-- 检测结果 -->
+        <div id="detect-info" style="display:none;"></div>
+
+        <!-- 统计 -->
+        <div class="stats" id="stats-bar" style="display:none;"></div>
+
+        <!-- 记录表 -->
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Record</th><th>Type</th><th>Value</th>
+                        <th>TTL</th><th>Status</th><th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="records-body">
+                    <tr><td colspan="6" class="empty-msg">Enter domain and click QUERY</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<!-- 添加/编辑 Dialog -->
+<dialog id="record-dialog">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3 id="dialog-title">ADD RECORD</h3>
+            <button class="close-btn" onclick="closeDialog()">&times;</button>
+        </div>
+        <form id="record-form" onsubmit="return submitRecord(event)">
+            <input type="hidden" id="form-mode" value="add">
+            <input type="hidden" id="form-record-id" value="">
+            <div class="form-grid">
+                <div>
+                    <label for="form-rr">Record (RR)</label>
+                    <input type="text" id="form-rr" required placeholder="www, @, *">
+                </div>
+                <div>
+                    <label for="form-type">Type</label>
+                    <select id="form-type" required>
+                        <option>A</option><option>AAAA</option><option>CNAME</option>
+                        <option>MX</option><option>TXT</option><option>NS</option><option>SRV</option>
+                    </select>
+                </div>
+                <div class="full">
+                    <label for="form-value">Value</label>
+                    <input type="text" id="form-value" required placeholder="IP address or target domain">
+                </div>
+                <div>
+                    <label for="form-ttl">TTL (sec)</label>
+                    <input type="number" id="form-ttl" value="600" min="1">
+                </div>
+                <div>
+                    <label for="form-priority">Priority (MX)</label>
+                    <input type="number" id="form-priority" placeholder="Optional">
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" onclick="closeDialog()">CANCEL</button>
+                <button type="submit" class="primary" id="form-submit-btn">CONFIRM</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- 删除确认 Dialog -->
+<dialog id="delete-dialog">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3>CONFIRM DELETE</h3>
+            <button class="close-btn" onclick="document.getElementById('delete-dialog').close()">&times;</button>
+        </div>
+        <p class="delete-msg" id="delete-msg"></p>
+        <div class="dialog-footer">
+            <button onclick="document.getElementById('delete-dialog').close()">CANCEL</button>
+            <button class="danger" id="delete-confirm-btn">DELETE</button>
+        </div>
+    </div>
+</dialog>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ---------- 状态 ----------
+let authToken = localStorage.getItem('dns_auth_token') || '';
+let currentDomain = '';
+let currentRecords = [];
+let detectedProvider = '';
+
+// ---------- 工具函数 ----------
+function toast(msg, type = 'info') {
+    const c = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+async function api(method, path, body = null) {
+    const opts = {
+        method,
+        headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+        },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    const data = await res.json();
+    if (!res.ok) {
+        const errMsg = data.error || data.error_message || `HTTP ${res.status}`;
+        throw new Error(errMsg);
+    }
+    return data;
+}
+
+function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ---------- 域名清洗 ----------
+const MULTI_TLDS = new Set([
+    'com.cn','net.cn','org.cn','gov.cn','ac.cn',
+    'com.tw','org.tw','net.tw','gov.tw',
+    'com.hk','org.hk','net.hk','gov.hk',
+    'co.uk','org.uk','ac.uk','gov.uk',
+    'co.jp','or.jp','ne.jp','ac.jp',
+    'com.au','net.au','org.au',
+    'co.kr','or.kr','ne.kr',
+    'co.in','net.in','org.in',
+    'com.sg','org.sg','net.sg',
+    'com.my','net.my','org.my',
+    'com.br','net.br','org.br',
+    'co.nz','net.nz','org.nz',
+    'co.za','net.za','org.za',
+    'co.th','or.th','in.th',
+]);
+
+function extractRootDomain(fqdn) {
+    fqdn = fqdn.trim().replace(/\.+$/, '').toLowerCase();
+    const parts = fqdn.split('.');
+    if (parts.length <= 2) return { root: fqdn, sub: '' };
+    const twoSuffix = parts.slice(-2).join('.');
+    if (MULTI_TLDS.has(twoSuffix)) {
+        if (parts.length <= 3) return { root: fqdn, sub: '' };
+        return { root: parts.slice(-3).join('.'), sub: parts.slice(0, -3).join('.') };
+    }
+    return { root: parts.slice(-2).join('.'), sub: parts.slice(0, -2).join('.') };
+}
+
+let domainInputTimer = null;
+function onDomainInput() {
+    clearTimeout(domainInputTimer);
+    domainInputTimer = setTimeout(() => {
+        const val = document.getElementById('domain-input').value.trim();
+        const hint = document.getElementById('domain-hint');
+        if (!val || !val.includes('.')) { hint.style.display = 'none'; return; }
+        const { root, sub } = extractRootDomain(val);
+        if (!sub) { hint.style.display = 'none'; return; }
+        hint.style.display = '';
+        hint.innerHTML =
+            `<span class="hint-rr">${escapeHtml(val)}</span>` +
+            `<span class="hint-arrow">&rarr;</span>` +
+            `Root: <span class="hint-root">${escapeHtml(root)}</span>` +
+            ` | RR: <span class="hint-rr">${escapeHtml(sub)}</span>` +
+            ` (auto-filled)`;
+        // 自动填入 RR 过滤
+        document.getElementById('filter-rr').value = sub;
+    }, 200);
+}
+
+// ---------- 认证 ----------
+function doLogin() {
+    const input = document.getElementById('token-input');
+    authToken = input.value.trim();
+    if (!authToken) { toast('请输入 Token', 'error'); return; }
+    api('GET', '/api/providers').then(data => {
+        localStorage.setItem('dns_auth_token', authToken);
+        showMainUI();
+        loadProviders(data.providers);
+        toast('认证成功', 'success');
+    }).catch(err => {
+        toast('认证失败: ' + err.message, 'error');
+        authToken = '';
+    });
+}
+
+function logout() {
+    authToken = '';
+    localStorage.removeItem('dns_auth_token');
+    document.getElementById('main-section').style.display = 'none';
+    document.getElementById('login-section').style.display = '';
+    document.getElementById('auth-status').innerHTML = '';
+}
+
+function showMainUI() {
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('main-section').style.display = '';
+    document.getElementById('auth-status').innerHTML =
+        '<button class="nav-btn" onclick="logout()">LOGOUT</button>';
+}
+
+// 自动登录
+if (authToken) {
+    api('GET', '/api/providers').then(data => {
+        showMainUI();
+        loadProviders(data.providers);
+    }).catch(() => { authToken = ''; localStorage.removeItem('dns_auth_token'); });
+}
+
+function loadProviders(providers) {
+    const sel = document.getElementById('force-provider');
+    while (sel.options.length > 1) sel.remove(1);
+    providers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p.toUpperCase();
+        sel.appendChild(opt);
+    });
+}
+
+// ---------- 查询 ----------
+async function queryRecords() {
+    const domain = document.getElementById('domain-input').value.trim();
+    if (!domain) { toast('请输入域名', 'error'); return; }
+    currentDomain = domain;
+
+    const filterType = document.getElementById('filter-type').value;
+    const filterRR = document.getElementById('filter-rr').value.trim();
+    const provider = document.getElementById('force-provider').value;
+
+    document.getElementById('records-body').innerHTML =
+        '<tr><td colspan="6" class="empty-msg"><span class="spinner"></span> Querying...</td></tr>';
+    document.getElementById('detect-info').style.display = 'none';
+    document.getElementById('stats-bar').style.display = 'none';
+
+    const detectPromise = provider ? Promise.resolve(null) : api('GET', `/api/detect/${encodeURIComponent(domain)}`).catch(() => null);
+
+    let params = new URLSearchParams();
+    if (filterType) params.set('type', filterType);
+    if (filterRR) params.set('rr', filterRR);
+    if (provider) params.set('provider', provider);
+
+    try {
+        const [detectResult, recordsResult] = await Promise.all([
+            detectPromise,
+            api('GET', `/api/records/${encodeURIComponent(domain)}?${params}`),
+        ]);
+
+        // 更新 currentDomain 为后端返回的根域名
+        if (recordsResult.domain) currentDomain = recordsResult.domain;
+        // 如果后端返回了 subdomain_rr，同步到 RR 过滤
+        if (recordsResult.subdomain_rr) {
+            document.getElementById('filter-rr').value = recordsResult.subdomain_rr;
+        }
+
+        if (detectResult) {
+            detectedProvider = detectResult.provider_type || 'unknown';
+            const infoDiv = document.getElementById('detect-info');
+            infoDiv.style.display = '';
+            const rootLabel = detectResult.subdomain_rr
+                ? `${escapeHtml(detectResult.input)} &rarr; <strong>${escapeHtml(detectResult.domain)}</strong>`
+                : escapeHtml(detectResult.domain);
+            infoDiv.innerHTML = `
+                ${rootLabel}&nbsp;
+                <span class="provider-badge ${escapeHtml(detectedProvider)}">${escapeHtml(detectResult.provider_name || detectedProvider)}</span>
+                Confidence ${((detectResult.confidence || 0) * 100).toFixed(0)}%
+                &nbsp;|&nbsp; NS: ${escapeHtml((detectResult.all_ns || []).join(', '))}
+            `;
+        } else if (provider) {
+            detectedProvider = provider;
+            const infoDiv = document.getElementById('detect-info');
+            infoDiv.style.display = '';
+            infoDiv.innerHTML = `<span class="provider-badge ${escapeHtml(provider)}">${escapeHtml(provider)}</span> (manual)`;
+        }
+
+        currentRecords = recordsResult.records || [];
+        renderRecords(currentRecords);
+
+        const statsBar = document.getElementById('stats-bar');
+        statsBar.style.display = 'flex';
+        const typeCounts = {};
+        currentRecords.forEach(r => { typeCounts[r.type] = (typeCounts[r.type] || 0) + 1; });
+        const typeStr = Object.entries(typeCounts).map(([t, c]) => `${t}: ${c}`).join('  |  ');
+        statsBar.textContent = `Total: ${currentRecords.length} records  |  ${typeStr}`;
+
+    } catch (err) {
+        toast('查询失败: ' + err.message, 'error');
+        document.getElementById('records-body').innerHTML =
+            `<tr><td colspan="6" class="empty-msg" style="color:#d66;">${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+function renderRecords(records) {
+    const tbody = document.getElementById('records-body');
+    if (!records.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No records found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = records.map((r, i) => {
+        const statusClass = (r.status || 'ENABLE') === 'ENABLE' ? 'status-on' : 'status-off';
+        return `
+        <tr>
+            <td class="rr-cell">${escapeHtml(r.rr)}</td>
+            <td><span class="type-badge">${escapeHtml(r.type)}</span></td>
+            <td class="value-cell" title="${escapeHtml(r.value)}">${escapeHtml(r.value)}</td>
+            <td>${r.ttl}</td>
+            <td class="${statusClass}">${escapeHtml(r.status || 'ENABLE')}</td>
+            <td class="actions">
+                <button class="ghost" onclick="openEditDialog(${i})">EDIT</button>
+                <button class="ghost danger" onclick="confirmDelete(${i})">DEL</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ---------- 添加 ----------
+function openAddDialog() {
+    if (!currentDomain) { toast('请先查询域名', 'error'); return; }
+    document.getElementById('dialog-title').textContent = 'ADD RECORD';
+    document.getElementById('form-mode').value = 'add';
+    document.getElementById('form-record-id').value = '';
+    document.getElementById('form-submit-btn').textContent = 'ADD';
+    document.getElementById('record-form').reset();
+    document.getElementById('form-ttl').value = '600';
+    document.getElementById('record-dialog').showModal();
+}
+
+// ---------- 编辑 ----------
+function openEditDialog(idx) {
+    const r = currentRecords[idx];
+    if (!r) return;
+    document.getElementById('dialog-title').textContent = 'EDIT RECORD';
+    document.getElementById('form-mode').value = 'edit';
+    document.getElementById('form-record-id').value = r.record_id || '';
+    document.getElementById('form-submit-btn').textContent = 'UPDATE';
+    document.getElementById('form-rr').value = r.rr;
+    document.getElementById('form-type').value = r.type;
+    document.getElementById('form-value').value = r.value;
+    document.getElementById('form-ttl').value = r.ttl || 600;
+    document.getElementById('form-priority').value = r.priority || '';
+    document.getElementById('record-dialog').showModal();
+}
+
+function closeDialog() {
+    document.getElementById('record-dialog').close();
+}
+
+async function submitRecord(e) {
+    e.preventDefault();
+    const mode = document.getElementById('form-mode').value;
+    const provider = document.getElementById('force-provider').value;
+    const body = {
+        rr: document.getElementById('form-rr').value.trim(),
+        type: document.getElementById('form-type').value,
+        value: document.getElementById('form-value').value.trim(),
+        ttl: parseInt(document.getElementById('form-ttl').value) || 600,
+    };
+    const priority = document.getElementById('form-priority').value;
+    if (priority) body.priority = parseInt(priority);
+    if (provider) body.provider = provider;
+
+    const btn = document.getElementById('form-submit-btn');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    try {
+        if (mode === 'add') {
+            await api('POST', `/api/records/${encodeURIComponent(currentDomain)}`, body);
+            toast('记录添加成功', 'success');
+        } else {
+            body.record_id = document.getElementById('form-record-id').value;
+            await api('PUT', `/api/records/${encodeURIComponent(currentDomain)}`, body);
+            toast('记录更新成功', 'success');
+        }
+        closeDialog();
+        queryRecords();
+    } catch (err) {
+        toast((mode === 'add' ? '添加' : '更新') + '失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+    }
+}
+
+// ---------- 删除 ----------
+let pendingDeleteRecord = null;
+
+function confirmDelete(idx) {
+    const r = currentRecords[idx];
+    if (!r) return;
+    pendingDeleteRecord = r;
+    document.getElementById('delete-msg').innerHTML =
+        `Delete record <strong>${escapeHtml(r.rr)}</strong> (${escapeHtml(r.type)}) &rarr; ${escapeHtml(r.value)}?<br>This action cannot be undone.`;
+    document.getElementById('delete-dialog').showModal();
+}
+
+document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
+    if (!pendingDeleteRecord) return;
+    const r = pendingDeleteRecord;
+    const btn = document.getElementById('delete-confirm-btn');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    const body = {
+        record_id: r.record_id,
+        rr: r.rr,
+        type: r.type,
+    };
+    const provider = document.getElementById('force-provider').value;
+    if (provider) body.provider = provider;
+
+    try {
+        await api('DELETE', `/api/records/${encodeURIComponent(currentDomain)}`, body);
+        toast('记录删除成功', 'success');
+        document.getElementById('delete-dialog').close();
+        queryRecords();
+    } catch (err) {
+        toast('删除失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+        pendingDeleteRecord = null;
+    }
+});
+
+// Enter 快捷键登录
+document.getElementById('token-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>

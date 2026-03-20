@@ -53,14 +53,22 @@ class CDNWClient:
         if not self.access_key or not self.secret_key:
             raise ValueError("请设置 CDNW_ACCESS_KEY 和 CDNW_SECRET_KEY 环境变量")
 
-    def _split_uri(self, uri: str) -> Tuple[str, str]:
-        """拆分 URI，返回 (path, query_string)"""
+    def _split_uri(self, uri: str, method: str = "GET") -> Tuple[str, str]:
+        """
+        拆分 URI，返回 (path, query_string)
+
+        注意: CDNW 签名规范中 POST 方法不将 query string 纳入签名计算，
+        与官方 SDK get_query_string() 行为一致。
+        """
         if '?' in uri:
             path, query = uri.split('?', 1)
         else:
             path, query = uri, ''
         if not path:
             path = '/'
+        # POST 方法的 query string 不参与签名
+        if method.upper() == "POST":
+            return path, ''
         return path, unquote(query)
 
     def _canonical_headers(self, headers: Dict[str, str]) -> str:
@@ -77,7 +85,7 @@ class CDNWClient:
                               body_str: str, headers: Dict[str, str],
                               timestamp: str) -> str:
         """根据 AK/SK 规则生成 Authorization 标头"""
-        path, query = self._split_uri(uri)
+        path, query = self._split_uri(uri, method)
         hashed_payload = hashlib.sha256(body_str.encode('utf-8')).hexdigest()
         canonical_headers = self._canonical_headers(headers)
         canonical_request = (
@@ -115,7 +123,8 @@ class CDNWClient:
         headers["Authorization"] = authorization
 
         url = f"{self.scheme}://{self.endpoint}{uri}"
-        data = body_str if method in {"POST", "PUT", "PATCH", "DELETE"} and body_str else None
+        # POST/PUT/PATCH/DELETE 必须发送 body（即使为空字符串），以确保签名一致
+        data = body_str if method in {"POST", "PUT", "PATCH", "DELETE"} else None
 
         try:
             response = requests.request(
@@ -123,10 +132,14 @@ class CDNWClient:
             )
             response.raise_for_status()
             return response.text
+        except requests.HTTPError as exc:
+            # CDNW 自定义状态码（如 462）携带业务语义，返回 body 供上层判断
+            if exc.response is not None:
+                logger.debug("CDNW API HTTP %s: %s", exc.response.status_code, uri)
+                return exc.response.text or ""
+            raise
         except requests.RequestException as exc:
             logger.error("CDNW API 请求失败: %s", exc)
-            if exc.response is not None and exc.response.text:
-                return exc.response.text
             raise
 
     def request(self, uri: str, method: str = "GET", body: Optional[dict] = None) -> dict:

@@ -5,7 +5,7 @@ File    : dns_cli.py
 Function: 统一多平台 DNS 记录变更 CLI
 Author  : jim
 Created : 2026-03-19
-Version : 1.0.0
+Version : 1.1.0
 说明: 自动判别域名归属平台，完成 DNS 解析记录 CRUD
 使用: python3 dns_cli.py <command> <domain> [options]
 """
@@ -280,7 +280,7 @@ def cmd_delete(args):
 def create_parser() -> argparse.ArgumentParser:
     """创建命令行解析器"""
     parser = argparse.ArgumentParser(
-        description="统一多平台 DNS 记录变更工具 v1.0.0",
+        description="统一多平台 DNS 记录变更工具 v1.1.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -400,9 +400,13 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    # 加载环境变量文件
+    # 加载环境变量文件（未指定时自动尝试默认路径）
     if args.env_file:
         load_env_file(args.env_file)
+    else:
+        default_env = os.path.expanduser("~/.credentials/unified-dns-manager.env")
+        if os.path.exists(default_env):
+            load_env_file(default_env)
 
     # 分发命令
     commands = {
