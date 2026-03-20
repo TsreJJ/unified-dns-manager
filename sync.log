@@ -1,0 +1,15 @@
+[1;34m↠  自動選擇唯一remote: origin[0m
+[1;34m↠  🔄 開始同步 單一倉庫: unified-dns-manager[0m
+[1;34m↠  📝 本地提交: jim@worker03,20260320 17:41[0m
+[1;34m↠  📡 使用remote: origin[0m
+[1;34m↠  檢測到GitHub倉庫[0m
+[1;34m↠  📥 拉取主倉庫 unified-dns-manager (remote: origin, 分支: master)[0m
+来自 github.com:TsreJJ/unified-dns-manager
+ * branch            master     -> FETCH_HEAD
+   797651b..3740a43  master     -> origin/master
+                                                                                成功变基并更新 refs/heads/master。
+[1;32m✅ 主倉庫拉取完成[0m
+[1;34m↠  📌 處理主倉庫變更 (推送到: origin)[0m
+[1;34m↠  📝 檢測到工作區變更(1 個檔案)[0m
+    ?? sync.log
+[1;34m↠  💾 提交主倉庫變更[0m
