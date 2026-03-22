@@ -75,6 +75,29 @@
             font-family: var(--font-mono);
             margin-left: .3rem;
         }
+        .nav-right {
+            display: flex; align-items: center; gap: .8rem;
+        }
+        .user-info {
+            font-family: var(--font-mono);
+            font-size: .75rem;
+            color: var(--text-secondary);
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 1px 7px;
+            border-radius: 2px;
+            font-size: .65rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: #fff;
+            margin-left: .4rem;
+        }
+        .role-badge.admin { background: var(--danger); }
+        .role-badge.operator { background: var(--info); }
+        .role-badge.viewer { background: #555; }
 
         /* body 偏移 */
         body { padding-top: var(--nav-height); }
@@ -120,7 +143,7 @@
         button[aria-busy="true"] { opacity: .6; pointer-events: none; }
 
         /* 输入框 */
-        input, select {
+        input, select, textarea {
             font-family: var(--font-mono);
             font-size: .82rem;
             padding: .45rem .7rem;
@@ -131,7 +154,7 @@
             outline: none;
             transition: border-color .15s;
         }
-        input:focus, select:focus { border-color: var(--accent); }
+        input:focus, select:focus, textarea:focus { border-color: var(--accent); }
         input::placeholder { color: var(--text-muted); }
         select { cursor: pointer; }
         select option { background: var(--bg-secondary); }
@@ -143,35 +166,6 @@
             text-transform: uppercase;
             letter-spacing: .8px;
             margin-bottom: .25rem;
-        }
-
-        /* ========== 登录 ========== */
-        #login-section {
-            max-width: 400px;
-            margin: 4rem auto;
-        }
-        .login-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 2rem;
-        }
-        .login-card h3 {
-            font-family: var(--font-mono);
-            font-size: .9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--accent);
-            margin-bottom: 1.5rem;
-            padding-bottom: .6rem;
-            border-bottom: 1px solid var(--border);
-        }
-        .login-card input {
-            width: 100%;
-            margin-bottom: 1rem;
-        }
-        .login-card button {
-            width: 100%;
         }
 
         /* ========== 查询栏 ========== */
@@ -363,6 +357,108 @@
         }
         .delete-msg strong { color: #d66; }
 
+        /* ========== Admin 面板 ========== */
+        #admin-section {
+            margin-top: 1.5rem;
+            display: none;
+        }
+        .admin-tabs {
+            display: flex; gap: 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+        .admin-tab {
+            font-family: var(--font-mono);
+            font-size: .75rem;
+            font-weight: 600;
+            padding: .5rem 1.2rem;
+            cursor: pointer;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            background: none;
+            border-left: none; border-right: none; border-top: none;
+            border-radius: 0;
+        }
+        .admin-tab:hover { color: var(--text-primary); }
+        .admin-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+        .admin-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1rem;
+        }
+        .admin-toolbar {
+            display: flex; gap: .5rem; align-items: center;
+            margin-bottom: 1rem; flex-wrap: wrap;
+        }
+        .admin-toolbar input, .admin-toolbar select {
+            font-size: .78rem; padding: .35rem .6rem;
+        }
+        .admin-toolbar input { width: 180px; }
+
+        /* 审计日志 */
+        .audit-filters {
+            display: flex; gap: .5rem; flex-wrap: wrap; align-items: end;
+            margin-bottom: 1rem;
+        }
+        .audit-filters input, .audit-filters select {
+            font-size: .78rem; padding: .35rem .6rem;
+        }
+        .audit-filters input { width: 160px; }
+        .pagination {
+            display: flex; gap: .5rem; align-items: center;
+            justify-content: center;
+            margin-top: .8rem;
+            font-family: var(--font-mono);
+            font-size: .75rem;
+            color: var(--text-muted);
+        }
+
+        /* ========== 用户管理 Dialog ========== */
+        dialog.wide { max-width: 600px; }
+        .domain-tags {
+            display: flex; flex-wrap: wrap; gap: .3rem;
+            margin-top: .3rem;
+        }
+        .domain-tag {
+            display: inline-flex; align-items: center; gap: .3rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            padding: 2px 8px;
+            font-size: .72rem;
+            font-family: var(--font-mono);
+        }
+        .domain-tag .remove-tag {
+            cursor: pointer; color: var(--danger); font-size: .8rem;
+            background: none; border: none; padding: 0; margin: 0;
+            line-height: 1;
+        }
+
+        /* ========== Access Denied ========== */
+        #access-denied {
+            display: none;
+            max-width: 400px;
+            margin: 4rem auto;
+            text-align: center;
+        }
+        .denied-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--danger);
+            border-radius: 4px;
+            padding: 2rem;
+        }
+        .denied-card h3 {
+            font-family: var(--font-mono);
+            color: var(--danger);
+            margin-bottom: 1rem;
+        }
+
         /* ========== Toast ========== */
         .toast-container {
             position: fixed;
@@ -429,19 +525,17 @@
         <div>
             <h1>UNIFIED DNS MANAGER</h1>
         </div>
-        <span class="ver">v1.1.0</span>
+        <span class="ver">v2.0.0</span>
     </div>
-    <div id="auth-status"></div>
+    <div class="nav-right" id="nav-right"></div>
 </nav>
 
 <div class="container">
-    <!-- 登录 -->
-    <section id="login-section">
-        <div class="login-card">
-            <h3>// Authentication</h3>
-            <label for="token-input">Bearer Token</label>
-            <input type="password" id="token-input" placeholder="Enter WEB_AUTH_TOKEN">
-            <button class="primary" style="margin-top:.5rem;" id="login-btn" onclick="doLogin()">AUTHENTICATE</button>
+    <!-- Access Denied -->
+    <section id="access-denied">
+        <div class="denied-card">
+            <h3>// ACCESS DENIED</h3>
+            <p id="denied-message" style="color:var(--text-secondary);font-size:.85rem;"></p>
         </div>
     </section>
 
@@ -463,7 +557,7 @@
                 <option value="">AUTO DETECT</option>
             </select>
             <button class="primary" onclick="queryRecords()">QUERY</button>
-            <button onclick="openAddDialog()">+ ADD</button>
+            <button id="btn-add" onclick="openAddDialog()" style="display:none;">+ ADD</button>
         </div>
         <!-- 域名清洗提示 -->
         <div id="domain-hint" class="domain-hint" style="display:none;"></div>
@@ -480,7 +574,7 @@
                 <thead>
                     <tr>
                         <th>Record</th><th>Type</th><th>Value</th>
-                        <th>TTL</th><th>Status</th><th>Actions</th>
+                        <th>TTL</th><th>Status</th><th id="th-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="records-body">
@@ -488,10 +582,85 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Admin 面板 -->
+        <section id="admin-section">
+            <div class="admin-tabs">
+                <button class="admin-tab active" onclick="switchAdminTab('users')">Users</button>
+                <button class="admin-tab" onclick="switchAdminTab('audit')">Audit Log</button>
+            </div>
+
+            <!-- 用户管理 -->
+            <div id="admin-users-panel" class="admin-panel">
+                <div class="admin-toolbar">
+                    <button class="primary" onclick="openUserDialog()">+ ADD USER</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Email</th><th>Role</th>
+                                <th>Display Name</th><th>Status</th><th>Domains</th><th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-body">
+                            <tr><td colspan="7" class="empty-msg">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 审计日志 -->
+            <div id="admin-audit-panel" class="admin-panel" style="display:none;">
+                <div class="audit-filters">
+                    <div>
+                        <label>User</label>
+                        <input type="text" id="audit-user" placeholder="email">
+                    </div>
+                    <div>
+                        <label>Domain</label>
+                        <input type="text" id="audit-domain" placeholder="domain">
+                    </div>
+                    <div>
+                        <label>Action</label>
+                        <select id="audit-action">
+                            <option value="">ALL</option>
+                            <option value="add">ADD</option>
+                            <option value="update">UPDATE</option>
+                            <option value="delete">DELETE</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Start</label>
+                        <input type="datetime-local" id="audit-start">
+                    </div>
+                    <div>
+                        <label>End</label>
+                        <input type="datetime-local" id="audit-end">
+                    </div>
+                    <button class="primary" onclick="queryAuditLogs(0)">SEARCH</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th><th>User</th><th>Action</th>
+                                <th>Domain</th><th>RR</th><th>Type</th>
+                                <th>Value</th><th>Result</th><th>IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-body">
+                            <tr><td colspan="9" class="empty-msg">Click SEARCH to query</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="audit-pagination"></div>
+            </div>
+        </section>
     </section>
 </div>
 
-<!-- 添加/编辑 Dialog -->
+<!-- 添加/编辑 Record Dialog -->
 <dialog id="record-dialog">
     <div class="dialog-inner">
         <div class="dialog-header">
@@ -549,15 +718,69 @@
     </div>
 </dialog>
 
+<!-- 用户管理 Dialog -->
+<dialog id="user-dialog" class="wide">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3 id="user-dialog-title">ADD USER</h3>
+            <button class="close-btn" onclick="document.getElementById('user-dialog').close()">&times;</button>
+        </div>
+        <form id="user-form" onsubmit="return submitUser(event)">
+            <input type="hidden" id="user-form-mode" value="add">
+            <input type="hidden" id="user-form-id" value="">
+            <div class="form-grid">
+                <div class="full">
+                    <label for="user-form-email">Email</label>
+                    <input type="email" id="user-form-email" required placeholder="user@example.com">
+                </div>
+                <div>
+                    <label for="user-form-role">Role</label>
+                    <select id="user-form-role">
+                        <option value="viewer">Viewer</option>
+                        <option value="operator">Operator</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="user-form-name">Display Name</label>
+                    <input type="text" id="user-form-name" placeholder="Optional">
+                </div>
+                <div class="full">
+                    <label>Domain Permissions</label>
+                    <div style="display:flex;gap:.3rem;">
+                        <input type="text" id="user-form-domain-input" placeholder="example.com" style="flex:1;">
+                        <button type="button" onclick="addDomainTag()">ADD</button>
+                    </div>
+                    <div class="domain-tags" id="user-form-domains"></div>
+                </div>
+                <div>
+                    <label for="user-form-active">Active</label>
+                    <select id="user-form-active">
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button type="button" onclick="document.getElementById('user-dialog').close()">CANCEL</button>
+                <button type="submit" class="primary" id="user-form-submit-btn">CONFIRM</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
 <!-- Toast 容器 -->
 <div class="toast-container" id="toast-container"></div>
 
 <script>
 // ---------- 状态 ----------
-let authToken = localStorage.getItem('dns_auth_token') || '';
+let currentUser = null;  // {email, role, auth_method, display_name, domains?}
 let currentDomain = '';
 let currentRecords = [];
 let detectedProvider = '';
+let adminUsers = [];
+let auditOffset = 0;
+const AUDIT_LIMIT = 50;
 
 // ---------- 工具函数 ----------
 function toast(msg, type = 'info') {
@@ -572,10 +795,8 @@ function toast(msg, type = 'info') {
 async function api(method, path, body = null) {
     const opts = {
         method,
-        headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
     };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(path, opts);
@@ -591,6 +812,14 @@ function escapeHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+}
+
+function canWrite() {
+    return currentUser && (currentUser.role === 'admin' || currentUser.role === 'operator');
+}
+
+function isAdmin() {
+    return currentUser && currentUser.role === 'admin';
 }
 
 // ---------- 域名清洗 ----------
@@ -639,48 +868,57 @@ function onDomainInput() {
             `Root: <span class="hint-root">${escapeHtml(root)}</span>` +
             ` | RR: <span class="hint-rr">${escapeHtml(sub)}</span>` +
             ` (auto-filled)`;
-        // 自动填入 RR 过滤
         document.getElementById('filter-rr').value = sub;
     }, 200);
 }
 
-// ---------- 认证 ----------
-function doLogin() {
-    const input = document.getElementById('token-input');
-    authToken = input.value.trim();
-    if (!authToken) { toast('请输入 Token', 'error'); return; }
-    api('GET', '/api/providers').then(data => {
-        localStorage.setItem('dns_auth_token', authToken);
+// ---------- 初始化 ----------
+async function initApp() {
+    try {
+        currentUser = await api('GET', '/api/me');
         showMainUI();
-        loadProviders(data.providers);
-        toast('认证成功', 'success');
-    }).catch(err => {
-        toast('认证失败: ' + err.message, 'error');
-        authToken = '';
-    });
-}
-
-function logout() {
-    authToken = '';
-    localStorage.removeItem('dns_auth_token');
-    document.getElementById('main-section').style.display = 'none';
-    document.getElementById('login-section').style.display = '';
-    document.getElementById('auth-status').innerHTML = '';
+        // 加载 providers
+        const provData = await api('GET', '/api/providers');
+        loadProviders(provData.providers);
+    } catch (err) {
+        showAccessDenied(err.message);
+    }
 }
 
 function showMainUI() {
-    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('access-denied').style.display = 'none';
     document.getElementById('main-section').style.display = '';
-    document.getElementById('auth-status').innerHTML =
-        '<button class="nav-btn" onclick="logout()">LOGOUT</button>';
+
+    // 导航栏用户信息
+    const navRight = document.getElementById('nav-right');
+    navRight.innerHTML =
+        `<span class="user-info">${escapeHtml(currentUser.email)}` +
+        `<span class="role-badge ${currentUser.role}">${currentUser.role}</span></span>` +
+        (isAdmin() ? '<button class="nav-btn" onclick="toggleAdmin()">ADMIN</button>' : '');
+
+    // 角色感知 UI
+    if (canWrite()) {
+        document.getElementById('btn-add').style.display = '';
+    }
+    if (!canWrite()) {
+        document.getElementById('th-actions').style.display = 'none';
+    }
 }
 
-// 自动登录
-if (authToken) {
-    api('GET', '/api/providers').then(data => {
-        showMainUI();
-        loadProviders(data.providers);
-    }).catch(() => { authToken = ''; localStorage.removeItem('dns_auth_token'); });
+function showAccessDenied(msg) {
+    document.getElementById('main-section').style.display = 'none';
+    document.getElementById('access-denied').style.display = '';
+    document.getElementById('denied-message').textContent = msg || 'Authentication required. Please access through Cloudflare Access.';
+}
+
+function toggleAdmin() {
+    const sec = document.getElementById('admin-section');
+    if (sec.style.display === 'none' || !sec.style.display) {
+        sec.style.display = '';
+        loadAdminUsers();
+    } else {
+        sec.style.display = 'none';
+    }
 }
 
 function loadProviders(providers) {
@@ -721,9 +959,7 @@ async function queryRecords() {
             api('GET', `/api/records/${encodeURIComponent(domain)}?${params}`),
         ]);
 
-        // 更新 currentDomain 为后端返回的根域名
         if (recordsResult.domain) currentDomain = recordsResult.domain;
-        // 如果后端返回了 subdomain_rr，同步到 RR 过滤
         if (recordsResult.subdomain_rr) {
             document.getElementById('filter-rr').value = recordsResult.subdomain_rr;
         }
@@ -767,12 +1003,19 @@ async function queryRecords() {
 
 function renderRecords(records) {
     const tbody = document.getElementById('records-body');
+    const showActions = canWrite();
     if (!records.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No records found</td></tr>';
         return;
     }
     tbody.innerHTML = records.map((r, i) => {
         const statusClass = (r.status || 'ENABLE') === 'ENABLE' ? 'status-on' : 'status-off';
+        const actionsHtml = showActions
+            ? `<td class="actions">
+                <button class="ghost" onclick="openEditDialog(${i})">EDIT</button>
+                <button class="ghost danger" onclick="confirmDelete(${i})">DEL</button>
+               </td>`
+            : '';
         return `
         <tr>
             <td class="rr-cell">${escapeHtml(r.rr)}</td>
@@ -780,10 +1023,7 @@ function renderRecords(records) {
             <td class="value-cell" title="${escapeHtml(r.value)}">${escapeHtml(r.value)}</td>
             <td>${r.ttl}</td>
             <td class="${statusClass}">${escapeHtml(r.status || 'ENABLE')}</td>
-            <td class="actions">
-                <button class="ghost" onclick="openEditDialog(${i})">EDIT</button>
-                <button class="ghost danger" onclick="confirmDelete(${i})">DEL</button>
-            </td>
+            ${actionsHtml}
         </tr>`;
     }).join('');
 }
@@ -898,10 +1138,229 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async ()
     }
 });
 
-// Enter 快捷键登录
-document.getElementById('token-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
+// ========== Admin 面板 ==========
+
+function switchAdminTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('admin-users-panel').style.display = tab === 'users' ? '' : 'none';
+    document.getElementById('admin-audit-panel').style.display = tab === 'audit' ? '' : 'none';
+}
+
+// ---------- 用户管理 ----------
+async function loadAdminUsers() {
+    try {
+        const data = await api('GET', '/api/admin/users');
+        adminUsers = data.users || [];
+        renderAdminUsers();
+    } catch (err) {
+        toast('加载用户列表失败: ' + err.message, 'error');
+    }
+}
+
+function renderAdminUsers() {
+    const tbody = document.getElementById('users-body');
+    if (!adminUsers.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-msg">No users</td></tr>';
+        return;
+    }
+    tbody.innerHTML = adminUsers.map(u => {
+        const statusClass = u.is_active ? 'status-on' : 'status-off';
+        const domainStr = u.role === 'admin' ? '<em style="color:var(--text-muted)">ALL</em>'
+            : (u.domains || []).map(d => escapeHtml(d)).join(', ') || '<em style="color:var(--text-muted)">none</em>';
+        return `
+        <tr>
+            <td>${u.id}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td><span class="role-badge ${u.role}">${u.role}</span></td>
+            <td>${escapeHtml(u.display_name || '')}</td>
+            <td class="${statusClass}">${u.is_active ? 'Active' : 'Disabled'}</td>
+            <td style="max-width:200px;font-size:.75rem;">${domainStr}</td>
+            <td class="actions">
+                <button class="ghost" onclick="openEditUserDialog(${u.id})">EDIT</button>
+                <button class="ghost danger" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.email)}')">DEL</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// 用户 dialog 中的域名标签
+let userFormDomains = [];
+
+function addDomainTag() {
+    const input = document.getElementById('user-form-domain-input');
+    const domain = input.value.trim().toLowerCase();
+    if (!domain || userFormDomains.includes(domain)) { input.value = ''; return; }
+    userFormDomains.push(domain);
+    input.value = '';
+    renderDomainTags();
+}
+
+function removeDomainTag(domain) {
+    userFormDomains = userFormDomains.filter(d => d !== domain);
+    renderDomainTags();
+}
+
+function renderDomainTags() {
+    const container = document.getElementById('user-form-domains');
+    container.innerHTML = userFormDomains.map(d =>
+        `<span class="domain-tag">${escapeHtml(d)}
+            <button type="button" class="remove-tag" onclick="removeDomainTag('${escapeHtml(d)}')">&times;</button>
+        </span>`
+    ).join('');
+}
+
+function openUserDialog(user) {
+    userFormDomains = [];
+    document.getElementById('user-form').reset();
+    document.getElementById('user-form-mode').value = 'add';
+    document.getElementById('user-form-id').value = '';
+    document.getElementById('user-dialog-title').textContent = 'ADD USER';
+    document.getElementById('user-form-email').disabled = false;
+    document.getElementById('user-form-submit-btn').textContent = 'ADD';
+    document.getElementById('user-form-active').value = '1';
+    renderDomainTags();
+    document.getElementById('user-dialog').showModal();
+}
+
+function openEditUserDialog(userId) {
+    const user = adminUsers.find(u => u.id === userId);
+    if (!user) return;
+    userFormDomains = [...(user.domains || [])];
+    document.getElementById('user-form-mode').value = 'edit';
+    document.getElementById('user-form-id').value = user.id;
+    document.getElementById('user-dialog-title').textContent = 'EDIT USER';
+    document.getElementById('user-form-email').value = user.email;
+    document.getElementById('user-form-email').disabled = true;
+    document.getElementById('user-form-role').value = user.role;
+    document.getElementById('user-form-name').value = user.display_name || '';
+    document.getElementById('user-form-active').value = user.is_active ? '1' : '0';
+    document.getElementById('user-form-submit-btn').textContent = 'UPDATE';
+    renderDomainTags();
+    document.getElementById('user-dialog').showModal();
+}
+
+// 域名输入框 Enter 添加标签
+document.getElementById('user-form-domain-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addDomainTag(); }
 });
+
+async function submitUser(e) {
+    e.preventDefault();
+    const mode = document.getElementById('user-form-mode').value;
+    const btn = document.getElementById('user-form-submit-btn');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    try {
+        if (mode === 'add') {
+            const body = {
+                email: document.getElementById('user-form-email').value.trim(),
+                role: document.getElementById('user-form-role').value,
+                display_name: document.getElementById('user-form-name').value.trim(),
+                domains: userFormDomains,
+            };
+            await api('POST', '/api/admin/users', body);
+            toast('用户创建成功', 'success');
+        } else {
+            const userId = document.getElementById('user-form-id').value;
+            const body = {
+                role: document.getElementById('user-form-role').value,
+                display_name: document.getElementById('user-form-name').value.trim(),
+                is_active: parseInt(document.getElementById('user-form-active').value),
+            };
+            await api('PUT', `/api/admin/users/${userId}`, body);
+            // 同步更新域名权限
+            await api('PUT', `/api/admin/users/${userId}/domains`, { domains: userFormDomains });
+            toast('用户更新成功', 'success');
+        }
+        document.getElementById('user-dialog').close();
+        loadAdminUsers();
+    } catch (err) {
+        toast((mode === 'add' ? '创建' : '更新') + '失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+    }
+}
+
+async function confirmDeleteUser(userId, email) {
+    if (!confirm(`确认删除用户 ${email}？此操作不可撤销。`)) return;
+    try {
+        await api('DELETE', `/api/admin/users/${userId}`);
+        toast(`用户 ${email} 已删除`, 'success');
+        loadAdminUsers();
+    } catch (err) {
+        toast('删除失败: ' + err.message, 'error');
+    }
+}
+
+// ---------- 审计日志 ----------
+async function queryAuditLogs(offset) {
+    auditOffset = offset || 0;
+    const params = new URLSearchParams();
+    const user = document.getElementById('audit-user').value.trim();
+    const domain = document.getElementById('audit-domain').value.trim();
+    const action = document.getElementById('audit-action').value;
+    const start = document.getElementById('audit-start').value;
+    const end = document.getElementById('audit-end').value;
+
+    if (user) params.set('user', user);
+    if (domain) params.set('domain', domain);
+    if (action) params.set('action', action);
+    if (start) params.set('start', new Date(start).toISOString());
+    if (end) params.set('end', new Date(end).toISOString());
+    params.set('limit', AUDIT_LIMIT);
+    params.set('offset', auditOffset);
+
+    try {
+        const data = await api('GET', `/api/admin/audit?${params}`);
+        renderAuditLogs(data.logs, data.total);
+    } catch (err) {
+        toast('审计日志查询失败: ' + err.message, 'error');
+    }
+}
+
+function renderAuditLogs(logs, total) {
+    const tbody = document.getElementById('audit-body');
+    if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">No audit logs found</td></tr>';
+        document.getElementById('audit-pagination').innerHTML = '';
+        return;
+    }
+    tbody.innerHTML = logs.map(l => {
+        const resultClass = l.result_success ? 'status-on' : 'status-off';
+        const ts = l.timestamp ? l.timestamp.replace('T', ' ').replace('Z', '') : '';
+        return `
+        <tr>
+            <td style="white-space:nowrap;font-size:.75rem;">${escapeHtml(ts)}</td>
+            <td style="font-size:.75rem;">${escapeHtml(l.user_email)}</td>
+            <td><span class="type-badge">${escapeHtml(l.action)}</span></td>
+            <td>${escapeHtml(l.domain)}</td>
+            <td class="rr-cell">${escapeHtml(l.rr)}</td>
+            <td>${escapeHtml(l.record_type)}</td>
+            <td class="value-cell" title="${escapeHtml(l.value)}">${escapeHtml(l.value)}</td>
+            <td class="${resultClass}">${l.result_success ? 'OK' : 'FAIL'}</td>
+            <td style="font-size:.72rem;">${escapeHtml(l.ip_address)}</td>
+        </tr>`;
+    }).join('');
+
+    // 分页
+    const pg = document.getElementById('audit-pagination');
+    const totalPages = Math.ceil(total / AUDIT_LIMIT);
+    const currentPage = Math.floor(auditOffset / AUDIT_LIMIT) + 1;
+    let html = `Total: ${total} | Page ${currentPage}/${totalPages} `;
+    if (auditOffset > 0) {
+        html += `<button class="ghost" onclick="queryAuditLogs(${auditOffset - AUDIT_LIMIT})">PREV</button>`;
+    }
+    if (auditOffset + AUDIT_LIMIT < total) {
+        html += `<button class="ghost" onclick="queryAuditLogs(${auditOffset + AUDIT_LIMIT})">NEXT</button>`;
+    }
+    pg.innerHTML = html;
+}
+
+// ---------- 启动 ----------
+initApp();
 </script>
 </body>
 </html>

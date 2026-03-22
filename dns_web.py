@@ -2,11 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 File    : dns_web.py
-Function: 统一多平台 DNS 记录变更 Web UI
+Function: 统一多平台 DNS 记录变更 Web UI（含 RBAC + 审计）
 Author  : jim
 Created : 2026-03-19
-Version : 1.1.1
+Version : 2.0.0
 说明: 基于 Flask 的 REST API + 单页 Web UI，复用 lib/dns_api.py facade
+     认证: CF Access JWT 优先，Bearer Token 兼容 CLI/自动化
+     权限: 角色 (admin/operator/viewer) + 域名级细粒度控制
+     审计: 所有写操作自动记录
 使用: python3 dns_web.py [--host 127.0.0.1] [--port 5000]
 """
 
@@ -15,10 +18,8 @@ import sys
 import json
 import logging
 import argparse
-import secrets
-from functools import wraps
 
-from flask import Flask, request, jsonify, render_template, abort
+from flask import Flask, request, jsonify, render_template, g
 
 # 将项目根目录加入 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +32,10 @@ from lib.dns_api import (
 )
 from lib.dns_provider_factory import DNSProviderFactory, ProviderType
 from lib.ns_detector import resolve_ns, NSDetectorService
+from lib.database import init_db, get_db
+from lib.cf_access_auth import require_auth, require_role
+from lib.rbac import require_domain_access, check_domain_permission
+from lib.audit import audit_log, query_audit_logs
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +66,9 @@ def extract_root_domain(fqdn: str) -> tuple:
     """
     从完整域名中提取根域名和子域名前缀
 
-    Args:
-        fqdn: 完整域名（如 test2345.zc2tv.com 或 a.b.example.co.uk）
-    Returns:
-        (root_domain, subdomain_rr)
-        示例: ("zc2tv.com", "test2345") 或 ("example.co.uk", "a.b")
-        若输入本身就是根域名则 subdomain_rr 为空字符串
+    参数: fqdn - 完整域名（如 test2345.zc2tv.com 或 a.b.example.co.uk）
+    返回值: (root_domain, subdomain_rr)
+    示例: ("zc2tv.com", "test2345") 或 ("example.co.uk", "a.b")
     """
     fqdn = fqdn.strip().rstrip(".").lower()
     parts = fqdn.split(".")
@@ -77,50 +79,15 @@ def extract_root_domain(fqdn: str) -> tuple:
     # 检查是否命中多段式 TLD
     two_part_suffix = ".".join(parts[-2:])
     if two_part_suffix in _MULTI_TLDS:
-        # 需要至少 3 段才构成根域名（如 example.co.uk）
         if len(parts) <= 3:
             return fqdn, ""
         root = ".".join(parts[-3:])
         sub = ".".join(parts[:-3])
         return root, sub
 
-    # 普通 TLD（.com, .net, .org 等）
     root = ".".join(parts[-2:])
     sub = ".".join(parts[:-2])
     return root, sub
-
-# ---------- 认证 ----------
-
-def _get_auth_token() -> str:
-    """
-    获取认证 token
-    优先从环境变量 WEB_AUTH_TOKEN 读取，未设置则自动生成并打印
-    """
-    token = os.environ.get("WEB_AUTH_TOKEN", "")
-    if not token:
-        token = secrets.token_urlsafe(32)
-        os.environ["WEB_AUTH_TOKEN"] = token
-        print(f"\n[安全] 未设置 WEB_AUTH_TOKEN，已自动生成:")
-        print(f"  Token: {token}")
-        print(f"  请保存此 token 用于 Web UI 登录\n")
-    return token
-
-
-def require_auth(f):
-    """
-    认证装饰器 — 校验 Bearer Token
-    GET /api/* 读操作也需认证（DNS 记录属于敏感信息）
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "缺少认证 token"}), 401
-        token = auth_header[7:]
-        if not secrets.compare_digest(token, _get_auth_token()):
-            return jsonify({"error": "认证 token 无效"}), 403
-        return f(*args, **kwargs)
-    return decorated
 
 
 # ---------- 页面路由 ----------
@@ -131,7 +98,32 @@ def index():
     return render_template("index.html")
 
 
-# ---------- API 路由 ----------
+# ---------- 用户信息 ----------
+
+@app.route("/api/me", methods=["GET"])
+@require_auth
+def api_me():
+    """当前用户信息"""
+    result = {
+        "email": g.user_email,
+        "role": g.user_role,
+        "display_name": getattr(g, "user_display_name", ""),
+        "auth_method": g.auth_method,
+    }
+
+    # 非 admin 用户返回其授权域名列表
+    if g.user_role != "admin" and g.user_id > 0:
+        db = get_db()
+        rows = db.execute(
+            "SELECT domain FROM domain_permissions WHERE user_id = ? ORDER BY domain",
+            (g.user_id,),
+        ).fetchall()
+        result["domains"] = [r["domain"] for r in rows]
+
+    return jsonify(result)
+
+
+# ---------- DNS API 路由 ----------
 
 @app.route("/api/providers", methods=["GET"])
 @require_auth
@@ -151,6 +143,7 @@ def api_parse_domain(fqdn):
 
 @app.route("/api/detect/<path:fqdn>", methods=["GET"])
 @require_auth
+@require_domain_access("fqdn")
 def api_detect(fqdn):
     """检测域名归属平台（自动提取根域名）"""
     root_domain, subdomain_rr = extract_root_domain(fqdn)
@@ -172,6 +165,7 @@ def api_detect(fqdn):
 
 @app.route("/api/records/<path:fqdn>", methods=["GET"])
 @require_auth
+@require_domain_access("fqdn")
 def api_list_records(fqdn):
     """列出解析记录（自动提取根域名，子域名作为 rr 过滤）"""
     root_domain, subdomain_rr = extract_root_domain(fqdn)
@@ -183,7 +177,6 @@ def api_list_records(fqdn):
         records = dns_list_records(
             root_domain, rr=rr, record_type=record_type, provider=provider,
         )
-        # rr_keyword 是 provider 端模糊搜索，需后端精确过滤
         if rr:
             records = [r for r in records if r.rr == rr]
         return jsonify({
@@ -200,6 +193,9 @@ def api_list_records(fqdn):
 
 @app.route("/api/records/<path:fqdn>", methods=["POST"])
 @require_auth
+@require_role("admin", "operator")
+@require_domain_access("fqdn")
+@audit_log("add")
 def api_add_record(fqdn):
     """添加解析记录（自动提取根域名）"""
     root_domain, _ = extract_root_domain(fqdn)
@@ -232,6 +228,9 @@ def api_add_record(fqdn):
 
 @app.route("/api/records/<path:fqdn>", methods=["PUT"])
 @require_auth
+@require_role("admin", "operator")
+@require_domain_access("fqdn")
+@audit_log("update")
 def api_update_record(fqdn):
     """更新解析记录（自动提取根域名）"""
     root_domain, _ = extract_root_domain(fqdn)
@@ -265,6 +264,9 @@ def api_update_record(fqdn):
 
 @app.route("/api/records/<path:fqdn>", methods=["DELETE"])
 @require_auth
+@require_role("admin", "operator")
+@require_domain_access("fqdn")
+@audit_log("delete")
 def api_delete_record(fqdn):
     """删除解析记录（自动提取根域名）"""
     root_domain, _ = extract_root_domain(fqdn)
@@ -295,12 +297,214 @@ def api_delete_record(fqdn):
         return jsonify({"error": str(e)}), 500
 
 
+# ---------- Admin API ----------
+
+@app.route("/api/admin/users", methods=["GET"])
+@require_auth
+@require_role("admin")
+def api_admin_list_users():
+    """用户列表"""
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, email, role, display_name, is_active, created_at, updated_at FROM users ORDER BY id",
+    ).fetchall()
+    users = []
+    for row in rows:
+        user = dict(row)
+        # 附加域名权限
+        domains = db.execute(
+            "SELECT domain FROM domain_permissions WHERE user_id = ? ORDER BY domain",
+            (row["id"],),
+        ).fetchall()
+        user["domains"] = [d["domain"] for d in domains]
+        users.append(user)
+    return jsonify({"users": users})
+
+
+@app.route("/api/admin/users", methods=["POST"])
+@require_auth
+@require_role("admin")
+def api_admin_create_user():
+    """创建用户"""
+    data = request.get_json(silent=True)
+    if not data or not data.get("email"):
+        return jsonify({"error": "缺少 email"}), 400
+
+    email = data["email"].strip().lower()
+    role = data.get("role", "viewer")
+    if role not in ("admin", "operator", "viewer"):
+        return jsonify({"error": "无效角色，可选: admin, operator, viewer"}), 400
+
+    display_name = data.get("display_name", "")
+    domains = data.get("domains", [])
+
+    db = get_db()
+    # 检查重复
+    existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if existing:
+        return jsonify({"error": f"用户 {email} 已存在"}), 409
+
+    cursor = db.execute(
+        "INSERT INTO users (email, role, display_name) VALUES (?, ?, ?)",
+        (email, role, display_name),
+    )
+    user_id = cursor.lastrowid
+
+    # 写入域名权限
+    for domain in domains:
+        domain = domain.strip().lower()
+        if domain:
+            db.execute(
+                "INSERT OR IGNORE INTO domain_permissions (user_id, domain) VALUES (?, ?)",
+                (user_id, domain),
+            )
+    db.commit()
+
+    logger.info("admin %s 创建用户: %s (role=%s)", g.user_email, email, role)
+    return jsonify({"id": user_id, "email": email, "role": role}), 201
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["PUT"])
+@require_auth
+@require_role("admin")
+def api_admin_update_user(user_id):
+    """编辑用户"""
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "请求体必须为 JSON"}), 400
+
+    updates = []
+    params = []
+
+    if "role" in data:
+        role = data["role"]
+        if role not in ("admin", "operator", "viewer"):
+            return jsonify({"error": "无效角色"}), 400
+        updates.append("role = ?")
+        params.append(role)
+
+    if "display_name" in data:
+        updates.append("display_name = ?")
+        params.append(data["display_name"])
+
+    if "is_active" in data:
+        updates.append("is_active = ?")
+        params.append(1 if data["is_active"] else 0)
+
+    if updates:
+        updates.append("updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')")
+        params.append(user_id)
+        db.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+        db.commit()
+
+    logger.info("admin %s 更新用户 #%d: %s", g.user_email, user_id, data)
+    return jsonify({"message": "更新成功"})
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin")
+def api_admin_delete_user(user_id):
+    """删除用户"""
+    db = get_db()
+    user = db.execute("SELECT email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+
+    # 禁止删除自己
+    if user["email"] == g.user_email:
+        return jsonify({"error": "不能删除自己"}), 400
+
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+
+    logger.info("admin %s 删除用户: %s (#%d)", g.user_email, user["email"], user_id)
+    return jsonify({"message": f"用户 {user['email']} 已删除"})
+
+
+@app.route("/api/admin/users/<int:user_id>/domains", methods=["GET"])
+@require_auth
+@require_role("admin")
+def api_admin_get_domains(user_id):
+    """查看用户域名权限"""
+    db = get_db()
+    user = db.execute("SELECT email, role FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+
+    rows = db.execute(
+        "SELECT domain FROM domain_permissions WHERE user_id = ? ORDER BY domain",
+        (user_id,),
+    ).fetchall()
+    return jsonify({
+        "user_id": user_id,
+        "email": user["email"],
+        "role": user["role"],
+        "domains": [r["domain"] for r in rows],
+    })
+
+
+@app.route("/api/admin/users/<int:user_id>/domains", methods=["PUT"])
+@require_auth
+@require_role("admin")
+def api_admin_set_domains(user_id):
+    """设置用户域名权限（全量替换）"""
+    db = get_db()
+    user = db.execute("SELECT email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+
+    data = request.get_json(silent=True)
+    if not data or "domains" not in data:
+        return jsonify({"error": "缺少 domains 字段"}), 400
+
+    domains = data["domains"]
+    if not isinstance(domains, list):
+        return jsonify({"error": "domains 必须为数组"}), 400
+
+    # 全量替换
+    db.execute("DELETE FROM domain_permissions WHERE user_id = ?", (user_id,))
+    for domain in domains:
+        domain = domain.strip().lower()
+        if domain:
+            db.execute(
+                "INSERT OR IGNORE INTO domain_permissions (user_id, domain) VALUES (?, ?)",
+                (user_id, domain),
+            )
+    db.commit()
+
+    logger.info("admin %s 设置用户 #%d 域名权限: %s", g.user_email, user_id, domains)
+    return jsonify({"message": "域名权限已更新", "domains": domains})
+
+
+@app.route("/api/admin/audit", methods=["GET"])
+@require_auth
+@require_role("admin")
+def api_admin_audit():
+    """审计日志查询"""
+    result = query_audit_logs(
+        user=request.args.get("user", ""),
+        domain=request.args.get("domain", ""),
+        action=request.args.get("action", ""),
+        start=request.args.get("start", ""),
+        end=request.args.get("end", ""),
+        limit=int(request.args.get("limit", 100)),
+        offset=int(request.args.get("offset", 0)),
+    )
+    return jsonify(result)
+
+
 # ---------- 入口 ----------
 
 def create_parser() -> argparse.ArgumentParser:
     """创建命令行解析器"""
     parser = argparse.ArgumentParser(
-        description="统一 DNS 管理 Web UI v1.1.0",
+        description="统一 DNS 管理 Web UI v2.0.0",
     )
     parser.add_argument(
         "--host", default="127.0.0.1",
@@ -322,7 +526,10 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def load_env_file(env_file: str):
-    """加载环境变量文件"""
+    """
+    加载环境变量文件
+    参数: env_file - 文件路径
+    """
     if not os.path.exists(env_file):
         print(f"错误: 环境变量文件不存在: {env_file}", file=sys.stderr)
         sys.exit(1)
@@ -353,10 +560,10 @@ def main():
         if os.path.exists(default_env):
             load_env_file(default_env)
 
-    # 初始化 token（启动时打印）
-    _get_auth_token()
+    # 初始化数据库（建表 + 种子 admin）
+    init_db(app)
 
-    print(f"启动 DNS Web UI: http://{args.host}:{args.port}")
+    print(f"启动 DNS Web UI v2.0.0: http://{args.host}:{args.port}")
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 

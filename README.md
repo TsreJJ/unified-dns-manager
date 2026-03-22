@@ -1,6 +1,8 @@
-# Unified DNS Manager v1.1.0
+# Unified DNS Manager v2.0.0
 
 统一多平台 DNS 记录变更系统 — CLI + Web UI + Python API 三入口，自动判别域名归属平台，完成 DNS 解析记录 CRUD。
+
+v2.0.0 新增：用户管理 (RBAC)、域名级权限控制、写操作审计日志。认证委托 Cloudflare Access + Auth0，项目仅负责 RBAC 与审计。
 
 ## 支持平台
 
@@ -26,6 +28,13 @@ AWS_ACCESS_KEY_ID=your_key
 AWS_SECRET_ACCESS_KEY=your_secret
 CDNW_ACCESS_KEY=your_key
 CDNW_SECRET_KEY=your_secret
+
+# RBAC + 审计（v2.0.0）
+CF_ACCESS_TEAM_NAME=<team>.cloudflareaccess.com
+CF_ACCESS_AUDIENCE=<Application AUD Tag>
+INITIAL_ADMIN_EMAIL=jim@example.com
+DB_PATH=~/.credentials/unified-dns-manager.db
+WEB_AUTH_TOKEN=<existing-token>   # CLI/自动化 fallback
 ```
 
 > 文件权限应设为 600：`chmod 600 ~/.credentials/unified-dns-manager.env`
@@ -40,6 +49,9 @@ pip install -r requirements.txt
 - `requests>=2.28.0` — HTTP 客户端
 - `dnspython>=2.4.0` — NS 自动检测（可选，fallback 到 dig）
 - `boto3>=1.28.0` — 仅 Route53 需要（可选）
+- `flask>=3.0.0` — Web UI
+- `PyJWT>=2.8.0` — CF Access JWT 验证
+- `cryptography>=41.0.0` — JWT 签名验证
 
 ## CLI 使用
 
@@ -182,16 +194,46 @@ result = dns_add_record("zc2tv.com", "_acme-challenge", "CNAME",
 
 ## Web UI
 
+### 架构（v2.0.0）
+
+```
+用户浏览器
+  │
+  ▼
+Cloudflare Access (Auth0 IdP 登录)  ← 认证在此完成
+  │  Cf-Access-Jwt-Assertion header
+  ▼
+CF Tunnel (cloudflared)
+  │
+  ▼
+Flask (127.0.0.1:5000)
+  ├─ lib/database.py          → SQLite 连接 + schema
+  ├─ lib/cf_access_auth.py    → CF JWT 验证 + require_auth
+  ├─ lib/rbac.py              → 角色 + 域名权限检查
+  ├─ lib/audit.py             → 写操作审计日志
+  └─ dns_web.py               → 路由集成
+```
+
+### 认证模式
+
+1. **CF Access JWT**（推荐）：通过 Cloudflare Access 登录后，自动携带 `Cf-Access-Jwt-Assertion` header，后端验证签名并从 JWT 中提取 email
+2. **Bearer Token**（兼容）：CLI 和自动化脚本使用 `Authorization: Bearer <WEB_AUTH_TOKEN>` header，映射为 admin 权限
+
+### 角色权限模型
+
+| 角色 | 读操作 | 写操作 | 域名范围 | 管理/审计 |
+|------|--------|--------|----------|-----------|
+| admin | 全部 | 全部 | 全部域名 | 可以 |
+| operator | 授权域名 | 授权域名 | domain_permissions | 不可 |
+| viewer | 授权域名 | 禁止 | domain_permissions | 不可 |
+
 ### 启动
 
 ```bash
 # 安装依赖
 pip install -r requirements.txt
 
-# 设置认证 token（不设置则自动生成并打印到终端）
-export WEB_AUTH_TOKEN="your-secret-token"
-
-# 启动（默认 127.0.0.1:5000）
+# 启动（默认 127.0.0.1:5000，自动创建数据库并种入 INITIAL_ADMIN_EMAIL）
 python3 dns_web.py
 
 # 自定义地址和端口
@@ -205,39 +247,106 @@ python3 dns_web.py --env-file /path/to/credentials.env
 
 - **域名检测** — 输入域名后自动识别托管平台（阿里云/Cloudflare/AWS/CDNetworks）
 - **记录列表** — 表格展示所有解析记录，支持按类型、主机记录过滤
-- **添加记录** — 表单填写 rr、type、value、TTL、priority
-- **编辑记录** — 点击编辑按钮修改记录值
-- **删除记录** — 带二次确认弹窗，防误删
+- **添加/编辑/删除记录** — 基于角色权限控制，viewer 隐藏写操作按钮
+- **用户管理** — admin 可创建/编辑/删除用户，分配角色和域名权限
+- **审计日志** — admin 可查询所有写操作记录，支持按用户/域名/时间过滤
 
 ### REST API
 
-| Method | Path | 功能 |
-|--------|------|------|
-| `GET` | `/api/providers` | 列出支持的平台 |
-| `GET` | `/api/detect/<domain>` | 检测域名归属平台 |
-| `GET` | `/api/records/<domain>` | 列出记录（query: `rr`, `type`, `provider`） |
-| `POST` | `/api/records/<domain>` | 添加记录 |
-| `PUT` | `/api/records/<domain>` | 更新记录 |
-| `DELETE` | `/api/records/<domain>` | 删除记录 |
-
-所有 API 需 `Authorization: Bearer <token>` header。
+| Method | Path | 功能 | 权限 |
+|--------|------|------|------|
+| `GET` | `/api/me` | 当前用户信息 | 需认证 |
+| `GET` | `/api/providers` | 列出支持的平台 | 需认证 |
+| `GET` | `/api/detect/<domain>` | 检测域名归属平台 | 需认证 + 域名权限 |
+| `GET` | `/api/records/<domain>` | 列出记录 | 需认证 + 域名权限 |
+| `POST` | `/api/records/<domain>` | 添加记录 | admin/operator + 域名权限 |
+| `PUT` | `/api/records/<domain>` | 更新记录 | admin/operator + 域名权限 |
+| `DELETE` | `/api/records/<domain>` | 删除记录 | admin/operator + 域名权限 |
+| `GET` | `/api/admin/users` | 用户列表 | admin |
+| `POST` | `/api/admin/users` | 创建用户 | admin |
+| `PUT` | `/api/admin/users/<id>` | 编辑用户 | admin |
+| `DELETE` | `/api/admin/users/<id>` | 删除用户 | admin |
+| `GET` | `/api/admin/users/<id>/domains` | 查看域名权限 | admin |
+| `PUT` | `/api/admin/users/<id>/domains` | 设置域名权限 | admin |
+| `GET` | `/api/admin/audit` | 审计日志查询 | admin |
 
 ### 安全
 
-- Bearer Token 认证，token 从 `WEB_AUTH_TOKEN` 环境变量读取
-- 默认绑定 `127.0.0.1`，仅本机可访问
-- 远程访问建议配合 Nginx 反向代理 + HTTPS
+- Cloudflare Access 网关级认证（JWT 签名验证，非仅信任 header）
+- Bearer Token 向后兼容 CLI/自动化
+- 基于角色 + 域名的细粒度权限控制
+- 所有写操作自动审计（记录操作者、IP、请求体、结果）
+- 默认绑定 `127.0.0.1`，通过 CF Tunnel 暴露
+
+## Cloudflare Tunnel + Access 配置
+
+### 1. 安装 cloudflared 并创建 Tunnel
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create dns-mgr
+```
+
+### 2. 配置 Tunnel
+
+编辑 `~/.cloudflared/config.yml`：
+
+```yaml
+tunnel: dns-mgr
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: dns-mgr.<your-domain>.com
+    service: http://127.0.0.1:5000
+  - service: http_status:404
+```
+
+### 3. 添加 DNS 路由
+
+```bash
+cloudflared tunnel route dns dns-mgr dns-mgr.<your-domain>.com
+```
+
+### 4. 配置 Cloudflare Access
+
+1. 登录 [CF Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+2. **Settings > Authentication > Add IdP** — 添加 Auth0 为 OIDC IdP：
+   - Auth0 Domain: `<tenant>.auth0.com`
+   - Client ID / Secret: 从 Auth0 Application 获取
+3. **Access > Applications > Add Self-hosted Application**
+   - Application domain: `dns-mgr.<your-domain>.com`
+   - Session duration: 24h
+4. **Access Policy**：配置允许的用户 email 或 email group
+5. 记录 **Application Audience (AUD) Tag** → 写入 `CF_ACCESS_AUDIENCE` 环境变量
+
+### 5. 启动 Tunnel
+
+```bash
+# 前台运行
+cloudflared tunnel run dns-mgr
+
+# 建议: systemd 管理
+sudo cloudflared service install
+```
+
+### 6. 验证
+
+1. 启动 Flask → DB 自动创建 → 默认 admin (`INITIAL_ADMIN_EMAIL`) 种入
+2. 浏览器访问 `dns-mgr.<your-domain>.com` → 跳转 Auth0 登录
+3. 登录后页面显示用户 email + role badge
+4. admin 点击 ADMIN 按钮 → 管理用户 + 查看审计日志
+5. `curl -H "Authorization: Bearer $WEB_AUTH_TOKEN" http://127.0.0.1:5000/api/me` → Legacy 模式验证
 
 ## 项目结构
 
 ```
 unified-dns-manager/
 ├── dns_cli.py                     # CLI 入口 (v1.1.0)
-├── dns_web.py                     # Web UI 入口 (v1.1.0)
+├── dns_web.py                     # Web UI 入口 (v2.0.0)
 ├── requirements.txt               # Python 依赖
 ├── README.md
 ├── templates/
-│   └── index.html                 # 单页 Web UI
+│   └── index.html                 # 单页 Web UI（含 admin 面板）
 ├── lib/
 │   ├── __init__.py
 │   ├── dns_api.py                 # Facade — 外部项目统一调用入口
@@ -248,7 +357,11 @@ unified-dns-manager/
 │   ├── dns_provider_route53.py    # AWS Route53 实现 (boto3 SigV4)
 │   ├── dns_provider_cdnw.py       # CDNetworks 实现 (自动 deploy 到生产)
 │   ├── cdnw_client.py             # CDNetworks API 签名客户端 (CNC-HMAC-SHA256)
-│   └── ns_detector.py             # NS 记录检测服务（支持 12 家云商识别）
+│   ├── ns_detector.py             # NS 记录检测服务（支持 12 家云商识别）
+│   ├── database.py                # SQLite 连接管理 + schema (v2.0.0)
+│   ├── cf_access_auth.py          # CF Access JWT 验证 + 双模式认证 (v2.0.0)
+│   ├── rbac.py                    # 角色 + 域名权限检查 (v2.0.0)
+│   └── audit.py                   # 写操作审计日志 (v2.0.0)
 ```
 
 ## 架构设计
@@ -268,10 +381,20 @@ unified-dns-manager/
 ├──────┬───────┬───────┬──────────┤
 │Aliyun│  CF   │Route53│  CDNW    │  ← 各平台 Provider
 └──────┴───────┴───────┴──────────┘
+         │
+         ▼ (Web UI v2.0.0)
+┌─────────────────────────────────┐
+│ CF Access (Auth0) → JWT 验证     │  ← 认证层
+├─────────────────────────────────┤
+│ RBAC (角色 + 域名权限)           │  ← 授权层
+├─────────────────────────────────┤
+│ Audit Log (SQLite)              │  ← 审计层
+└─────────────────────────────────┘
 ```
 
 ## 版本历史
 
+- **v2.0.0** — 用户管理 + RBAC（角色 + 域名权限）+ 写操作审计日志；认证委托 CF Access + Auth0；Web UI 新增 admin 面板（用户管理 + 审计查询）；Bearer Token 向后兼容 CLI/自动化
 - **v1.1.0** — 新增 Web UI（Flask + REST API），支持浏览器操作 DNS 记录 CRUD，Bearer Token 认证
 - **v1.0.1** — 新增 `dns_api.py` facade 供外部项目 import 调用；CLI 自动加载默认 env 文件
 - **v1.0.0** — 初始版本，支持 4 平台 DNS 记录 CRUD + NS 自动检测
