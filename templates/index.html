@@ -913,12 +913,9 @@ function showAccessDenied(msg) {
 
 function toggleAdmin() {
     const sec = document.getElementById('admin-section');
-    if (sec.style.display === 'none' || !sec.style.display) {
-        sec.style.display = '';
-        loadAdminUsers();
-    } else {
-        sec.style.display = 'none';
-    }
+    const visible = sec.style.display === 'block';
+    sec.style.display = visible ? 'none' : 'block';
+    if (!visible) loadAdminUsers();
 }
 
 function loadProviders(providers) {
