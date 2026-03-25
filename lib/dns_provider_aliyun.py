@@ -272,6 +272,25 @@ class AliyunDNSProvider(DNSProvider):
         except Exception as e:
             return OperationResult(success=False, error_message=str(e))
 
+    def set_record_status(
+        self,
+        record_id: str,
+        status: str,
+        domain_name: Optional[str] = None,
+    ) -> OperationResult:
+        """设置记录启用/暂停状态（阿里云 SetDomainRecordStatus）"""
+        status = status.upper()
+        if status not in ("ENABLE", "DISABLE"):
+            return OperationResult(success=False, error_message=f"无效状态: {status}")
+        try:
+            self._dns_api("SetDomainRecordStatus", {
+                "RecordId": record_id,
+                "Status": status,
+            })
+            return OperationResult(success=True, data={"record_id": record_id, "status": status})
+        except Exception as e:
+            return OperationResult(success=False, error_message=str(e))
+
     def delete_record(
         self,
         record_id: str,

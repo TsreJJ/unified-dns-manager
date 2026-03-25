@@ -158,6 +158,28 @@ class DNSProvider(ABC):
         """
         pass
 
+    def set_record_status(
+        self,
+        record_id: str,
+        status: str,
+        domain_name: Optional[str] = None,
+    ) -> OperationResult:
+        """
+        设置记录启用/暂停状态
+
+        参数：
+            record_id: 记录 ID
+            status: ENABLE 或 DISABLE
+            domain_name: 域名（部分平台需要）
+        返回：
+            操作结果
+        说明: 默认返回不支持，子类可覆盖实现
+        """
+        return OperationResult(
+            success=False,
+            error_message=f"Provider {self.provider_name} 不支持设置记录状态",
+        )
+
     def close(self) -> None:
         """关闭 Provider，释放资源"""
         pass

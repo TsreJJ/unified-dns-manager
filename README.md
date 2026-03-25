@@ -1,6 +1,8 @@
-# Unified DNS Manager v2.0.0
+# Unified DNS Manager v2.1.0
 
 统一多平台 DNS 记录变更系统 — CLI + Web UI + Python API 三入口，自动判别域名归属平台，完成 DNS 解析记录 CRUD。
+
+v2.1.0 新增：批量操作（批量修改 TTL、批量修改 Status、批量删除）。
 
 v2.0.0 新增：用户管理 (RBAC)、域名级权限控制、写操作审计日志。认证委托 Cloudflare Access + Auth0，项目仅负责 RBAC 与审计。
 

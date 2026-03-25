@@ -21,6 +21,9 @@ from lib.dns_provider_factory import DNSProviderFactory
 
 logger = logging.getLogger(__name__)
 
+# 版本号
+__version__ = "1.2.0"
+
 # 默认环境变量文件
 _DEFAULT_ENV = os.path.expanduser("~/.credentials/unified-dns-manager.env")
 
@@ -207,5 +210,29 @@ def dns_delete_record(
             record_id, domain_name=domain,
             rr=rr, record_type=record_type, value=value,
         )
+    finally:
+        p.close()
+
+
+def dns_set_record_status(
+    domain: str,
+    record_id: str,
+    status: str,
+    provider: Optional[str] = None,
+) -> OperationResult:
+    """
+    设置记录启用/暂停状态
+
+    Args:
+        domain: 域名
+        record_id: 记录 ID
+        status: ENABLE 或 DISABLE
+        provider: 强制指定平台（可选）
+    Returns:
+        OperationResult
+    """
+    p = _get_provider(domain, provider)
+    try:
+        return p.set_record_status(record_id, status, domain_name=domain)
     finally:
         p.close()

@@ -502,6 +502,39 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* ========== 批量操作工具栏 ========== */
+        .batch-bar {
+            display: none;
+            align-items: center;
+            gap: .6rem;
+            padding: .5rem .8rem;
+            margin-bottom: .6rem;
+            background: rgba(200,165,32,.08);
+            border: 1px solid rgba(200,165,32,.25);
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: .78rem;
+            color: var(--text-secondary);
+        }
+        .batch-bar.active { display: flex; }
+        .batch-bar .batch-count {
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .batch-bar .batch-sep {
+            width: 1px; height: 20px;
+            background: var(--border);
+        }
+
+        /* Checkbox 样式 */
+        th.col-check, td.col-check { width: 32px; text-align: center; }
+        input[type="checkbox"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+            width: 14px; height: 14px;
+        }
+        tbody tr.selected { background: rgba(200,165,32,.08); }
+
         /* ========== 警告条纹装饰 ========== */
         .hazard-stripe {
             height: 3px;
@@ -525,7 +558,7 @@
         <div>
             <h1>UNIFIED DNS MANAGER</h1>
         </div>
-        <span class="ver">v2.0.0</span>
+        <span class="ver">v2.1.0</span>
     </div>
     <div class="nav-right" id="nav-right"></div>
 </nav>
@@ -568,17 +601,31 @@
         <!-- 统计 -->
         <div class="stats" id="stats-bar" style="display:none;"></div>
 
+        <!-- 批量操作栏 -->
+        <div class="batch-bar" id="batch-bar">
+            <span>Selected: <span class="batch-count" id="batch-count">0</span></span>
+            <div class="batch-sep"></div>
+            <button onclick="openBatchTTLDialog()">BATCH TTL</button>
+            <button onclick="openBatchStatusDialog()">BATCH STATUS</button>
+            <button class="danger" onclick="confirmBatchDelete()">BATCH DELETE</button>
+            <div style="flex:1;"></div>
+            <button class="ghost" onclick="clearSelection()">CLEAR</button>
+        </div>
+
         <!-- 记录表 -->
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
+                        <th class="col-check" id="th-check" style="display:none;">
+                            <input type="checkbox" id="check-all" onchange="toggleSelectAll(this.checked)">
+                        </th>
                         <th>Record</th><th>Type</th><th>Value</th>
                         <th>TTL</th><th>Status</th><th id="th-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="records-body">
-                    <tr><td colspan="6" class="empty-msg">Enter domain and click QUERY</td></tr>
+                    <tr><td colspan="7" class="empty-msg">Enter domain and click QUERY</td></tr>
                 </tbody>
             </table>
         </div>
@@ -769,6 +816,66 @@
     </div>
 </dialog>
 
+<!-- 批量编辑 TTL Dialog -->
+<dialog id="batch-ttl-dialog">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3>BATCH UPDATE TTL</h3>
+            <button class="close-btn" onclick="document.getElementById('batch-ttl-dialog').close()">&times;</button>
+        </div>
+        <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:.8rem;">
+            Update TTL for <strong id="batch-ttl-count">0</strong> selected records
+        </p>
+        <div>
+            <label for="batch-ttl-value">New TTL (sec)</label>
+            <input type="number" id="batch-ttl-value" value="600" min="1" style="width:100%;">
+        </div>
+        <div class="dialog-footer">
+            <button onclick="document.getElementById('batch-ttl-dialog').close()">CANCEL</button>
+            <button class="primary" id="batch-ttl-confirm" onclick="executeBatchTTL()">UPDATE</button>
+        </div>
+    </div>
+</dialog>
+
+<!-- 批量编辑 Status Dialog -->
+<dialog id="batch-status-dialog">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3>BATCH UPDATE STATUS</h3>
+            <button class="close-btn" onclick="document.getElementById('batch-status-dialog').close()">&times;</button>
+        </div>
+        <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:.8rem;">
+            Update status for <strong id="batch-status-count">0</strong> selected records
+        </p>
+        <div>
+            <label for="batch-status-value">New Status</label>
+            <select id="batch-status-value" style="width:100%;">
+                <option value="ENABLE">ENABLE</option>
+                <option value="DISABLE">DISABLE</option>
+            </select>
+        </div>
+        <div class="dialog-footer">
+            <button onclick="document.getElementById('batch-status-dialog').close()">CANCEL</button>
+            <button class="primary" id="batch-status-confirm" onclick="executeBatchStatus()">UPDATE</button>
+        </div>
+    </div>
+</dialog>
+
+<!-- 批量删除确认 Dialog -->
+<dialog id="batch-delete-dialog">
+    <div class="dialog-inner">
+        <div class="dialog-header">
+            <h3>CONFIRM BATCH DELETE</h3>
+            <button class="close-btn" onclick="document.getElementById('batch-delete-dialog').close()">&times;</button>
+        </div>
+        <p class="delete-msg" id="batch-delete-msg"></p>
+        <div class="dialog-footer">
+            <button onclick="document.getElementById('batch-delete-dialog').close()">CANCEL</button>
+            <button class="danger" id="batch-delete-confirm" onclick="executeBatchDelete()">DELETE ALL</button>
+        </div>
+    </div>
+</dialog>
+
 <!-- Toast 容器 -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -779,6 +886,7 @@ let currentDomain = '';
 let currentRecords = [];
 let detectedProvider = '';
 let adminUsers = [];
+let selectedIndices = new Set();  // 已选中的记录索引
 let auditOffset = 0;
 const AUDIT_LIMIT = 50;
 
@@ -899,6 +1007,7 @@ function showMainUI() {
     // 角色感知 UI
     if (canWrite()) {
         document.getElementById('btn-add').style.display = '';
+        document.getElementById('th-check').style.display = '';
     }
     if (!canWrite()) {
         document.getElementById('th-actions').style.display = 'none';
@@ -1001,12 +1110,18 @@ async function queryRecords() {
 function renderRecords(records) {
     const tbody = document.getElementById('records-body');
     const showActions = canWrite();
+    selectedIndices.clear();
+    updateBatchBar();
     if (!records.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No records found</td></tr>';
+        const cols = showActions ? 7 : 6;
+        tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-msg">No records found</td></tr>`;
         return;
     }
     tbody.innerHTML = records.map((r, i) => {
         const statusClass = (r.status || 'ENABLE') === 'ENABLE' ? 'status-on' : 'status-off';
+        const checkHtml = showActions
+            ? `<td class="col-check"><input type="checkbox" data-idx="${i}" onchange="toggleRecordSelect(${i}, this.checked)"></td>`
+            : '';
         const actionsHtml = showActions
             ? `<td class="actions">
                 <button class="ghost" onclick="openEditDialog(${i})">EDIT</button>
@@ -1014,7 +1129,8 @@ function renderRecords(records) {
                </td>`
             : '';
         return `
-        <tr>
+        <tr id="row-${i}">
+            ${checkHtml}
             <td class="rr-cell">${escapeHtml(r.rr)}</td>
             <td><span class="type-badge">${escapeHtml(r.type)}</span></td>
             <td class="value-cell" title="${escapeHtml(r.value)}">${escapeHtml(r.value)}</td>
@@ -1023,6 +1139,9 @@ function renderRecords(records) {
             ${actionsHtml}
         </tr>`;
     }).join('');
+    // 重置全选
+    const checkAll = document.getElementById('check-all');
+    if (checkAll) checkAll.checked = false;
 }
 
 // ---------- 添加 ----------
@@ -1134,6 +1253,176 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async ()
         pendingDeleteRecord = null;
     }
 });
+
+// ========== 批量操作 ==========
+
+function toggleRecordSelect(idx, checked) {
+    if (checked) {
+        selectedIndices.add(idx);
+        const row = document.getElementById(`row-${idx}`);
+        if (row) row.classList.add('selected');
+    } else {
+        selectedIndices.delete(idx);
+        const row = document.getElementById(`row-${idx}`);
+        if (row) row.classList.remove('selected');
+    }
+    updateBatchBar();
+}
+
+function toggleSelectAll(checked) {
+    selectedIndices.clear();
+    currentRecords.forEach((_, i) => {
+        const cb = document.querySelector(`input[data-idx="${i}"]`);
+        if (cb) cb.checked = checked;
+        const row = document.getElementById(`row-${i}`);
+        if (checked) {
+            selectedIndices.add(i);
+            if (row) row.classList.add('selected');
+        } else {
+            if (row) row.classList.remove('selected');
+        }
+    });
+    updateBatchBar();
+}
+
+function clearSelection() {
+    toggleSelectAll(false);
+    const checkAll = document.getElementById('check-all');
+    if (checkAll) checkAll.checked = false;
+}
+
+function updateBatchBar() {
+    const bar = document.getElementById('batch-bar');
+    const count = document.getElementById('batch-count');
+    if (selectedIndices.size > 0) {
+        bar.classList.add('active');
+        count.textContent = selectedIndices.size;
+    } else {
+        bar.classList.remove('active');
+    }
+}
+
+function getSelectedRecords() {
+    return Array.from(selectedIndices).map(i => currentRecords[i]).filter(Boolean);
+}
+
+// -- 批量 TTL --
+function openBatchTTLDialog() {
+    const selected = getSelectedRecords();
+    if (!selected.length) { toast('未选择记录', 'error'); return; }
+    document.getElementById('batch-ttl-count').textContent = selected.length;
+    document.getElementById('batch-ttl-value').value = '600';
+    document.getElementById('batch-ttl-dialog').showModal();
+}
+
+async function executeBatchTTL() {
+    const selected = getSelectedRecords();
+    const ttl = parseInt(document.getElementById('batch-ttl-value').value);
+    if (!ttl || ttl < 1) { toast('TTL 必须大于 0', 'error'); return; }
+
+    const btn = document.getElementById('batch-ttl-confirm');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    const provider = document.getElementById('force-provider').value;
+    const body = {
+        field: 'ttl',
+        value: ttl,
+        records: selected.map(r => ({
+            record_id: r.record_id, rr: r.rr, type: r.type, value: r.value,
+        })),
+    };
+    if (provider) body.provider = provider;
+
+    try {
+        const result = await api('PUT', `/api/batch/${encodeURIComponent(currentDomain)}`, body);
+        toast(`TTL 更新完成: ${result.success_count} 成功, ${result.fail_count} 失败`, result.fail_count ? 'error' : 'success');
+        document.getElementById('batch-ttl-dialog').close();
+        queryRecords();
+    } catch (err) {
+        toast('批量 TTL 更新失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+    }
+}
+
+// -- 批量 Status --
+function openBatchStatusDialog() {
+    const selected = getSelectedRecords();
+    if (!selected.length) { toast('未选择记录', 'error'); return; }
+    document.getElementById('batch-status-count').textContent = selected.length;
+    document.getElementById('batch-status-value').value = 'ENABLE';
+    document.getElementById('batch-status-dialog').showModal();
+}
+
+async function executeBatchStatus() {
+    const selected = getSelectedRecords();
+    const status = document.getElementById('batch-status-value').value;
+
+    const btn = document.getElementById('batch-status-confirm');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    const provider = document.getElementById('force-provider').value;
+    const body = {
+        field: 'status',
+        value: status,
+        records: selected.map(r => ({ record_id: r.record_id })),
+    };
+    if (provider) body.provider = provider;
+
+    try {
+        const result = await api('PUT', `/api/batch/${encodeURIComponent(currentDomain)}`, body);
+        toast(`Status 更新完成: ${result.success_count} 成功, ${result.fail_count} 失败`, result.fail_count ? 'error' : 'success');
+        document.getElementById('batch-status-dialog').close();
+        queryRecords();
+    } catch (err) {
+        toast('批量 Status 更新失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+    }
+}
+
+// -- 批量删除 --
+function confirmBatchDelete() {
+    const selected = getSelectedRecords();
+    if (!selected.length) { toast('未选择记录', 'error'); return; }
+    const summary = selected.map(r => `${r.rr} (${r.type}) → ${r.value}`).join('<br>');
+    document.getElementById('batch-delete-msg').innerHTML =
+        `Delete <strong style="color:#d66;">${selected.length}</strong> records?<br>` +
+        `<div style="max-height:200px;overflow-y:auto;margin-top:.5rem;font-size:.78rem;font-family:var(--font-mono);color:var(--text-secondary);">${summary}</div>` +
+        `<br>This action cannot be undone.`;
+    document.getElementById('batch-delete-dialog').showModal();
+}
+
+async function executeBatchDelete() {
+    const selected = getSelectedRecords();
+    const btn = document.getElementById('batch-delete-confirm');
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+
+    const provider = document.getElementById('force-provider').value;
+    const body = {
+        records: selected.map(r => ({
+            record_id: r.record_id, rr: r.rr, type: r.type,
+        })),
+    };
+    if (provider) body.provider = provider;
+
+    try {
+        const result = await api('DELETE', `/api/batch/${encodeURIComponent(currentDomain)}`, body);
+        toast(`批量删除完成: ${result.success_count} 成功, ${result.fail_count} 失败`, result.fail_count ? 'error' : 'success');
+        document.getElementById('batch-delete-dialog').close();
+        queryRecords();
+    } catch (err) {
+        toast('批量删除失败: ' + err.message, 'error');
+    } finally {
+        btn.removeAttribute('aria-busy');
+        btn.disabled = false;
+    }
+}
 
 // ========== Admin 面板 ==========
 

@@ -5,7 +5,7 @@ File    : dns_web.py
 Function: 统一多平台 DNS 记录变更 Web UI（含 RBAC + 审计）
 Author  : jim
 Created : 2026-03-19
-Version : 2.0.0
+Version : 2.1.0
 说明: 基于 Flask 的 REST API + 单页 Web UI，复用 lib/dns_api.py facade
      认证: CF Access JWT 优先，Bearer Token 兼容 CLI/自动化
      权限: 角色 (admin/operator/viewer) + 域名级细粒度控制
@@ -29,6 +29,7 @@ from lib.dns_api import (
     dns_add_record,
     dns_update_record,
     dns_delete_record,
+    dns_set_record_status,
 )
 from lib.dns_provider_factory import DNSProviderFactory, ProviderType
 from lib.ns_detector import resolve_ns, NSDetectorService
@@ -297,6 +298,135 @@ def api_delete_record(fqdn):
         return jsonify({"error": str(e)}), 500
 
 
+# ---------- 批量操作 API ----------
+
+@app.route("/api/batch/<path:fqdn>", methods=["PUT"])
+@require_auth
+@require_role("admin", "operator")
+@require_domain_access("fqdn")
+@audit_log("batch_update")
+def api_batch_update(fqdn):
+    """批量更新记录（TTL / Status）"""
+    root_domain, _ = extract_root_domain(fqdn)
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "请求体必须为 JSON"}), 400
+
+    records = data.get("records")
+    if not records or not isinstance(records, list):
+        return jsonify({"error": "缺少 records 数组"}), 400
+
+    field = data.get("field")  # "ttl" 或 "status"
+    value = data.get("value")
+    if not field or value is None:
+        return jsonify({"error": "缺少 field 和 value"}), 400
+
+    provider = data.get("provider")
+    results = []
+    success_count = 0
+    fail_count = 0
+
+    for rec in records:
+        record_id = rec.get("record_id")
+        if not record_id:
+            results.append({"record_id": None, "success": False, "error": "缺少 record_id"})
+            fail_count += 1
+            continue
+
+        try:
+            if field == "status":
+                result = dns_set_record_status(
+                    root_domain, record_id, str(value), provider=provider,
+                )
+            elif field == "ttl":
+                # TTL 更新需要完整记录信息，通过传入的 rec 获取
+                rr = rec.get("rr")
+                record_type = rec.get("type")
+                rec_value = rec.get("value")
+                if not all([rr, record_type, rec_value]):
+                    results.append({"record_id": record_id, "success": False, "error": "TTL 更新需要 rr, type, value"})
+                    fail_count += 1
+                    continue
+                result = dns_update_record(
+                    root_domain, rr=rr, record_type=record_type,
+                    value=rec_value, ttl=int(value),
+                    record_id=record_id, provider=provider,
+                )
+            else:
+                results.append({"record_id": record_id, "success": False, "error": f"不支持的字段: {field}"})
+                fail_count += 1
+                continue
+
+            if result.success:
+                results.append({"record_id": record_id, "success": True})
+                success_count += 1
+            else:
+                results.append({"record_id": record_id, "success": False, "error": result.error_message})
+                fail_count += 1
+        except Exception as e:
+            results.append({"record_id": record_id, "success": False, "error": str(e)})
+            fail_count += 1
+
+    return jsonify({
+        "success_count": success_count,
+        "fail_count": fail_count,
+        "results": results,
+    })
+
+
+@app.route("/api/batch/<path:fqdn>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "operator")
+@require_domain_access("fqdn")
+@audit_log("batch_delete")
+def api_batch_delete(fqdn):
+    """批量删除记录"""
+    root_domain, _ = extract_root_domain(fqdn)
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "请求体必须为 JSON"}), 400
+
+    records = data.get("records")
+    if not records or not isinstance(records, list):
+        return jsonify({"error": "缺少 records 数组"}), 400
+
+    provider = data.get("provider")
+    results = []
+    success_count = 0
+    fail_count = 0
+
+    for rec in records:
+        record_id = rec.get("record_id")
+        rr = rec.get("rr")
+        record_type = rec.get("type")
+
+        if not record_id and (not rr or not record_type):
+            results.append({"record_id": record_id, "success": False, "error": "需要 record_id 或 rr + type"})
+            fail_count += 1
+            continue
+
+        try:
+            result = dns_delete_record(
+                root_domain, rr=rr, record_type=record_type,
+                record_id=record_id, provider=provider,
+            )
+            if result.success:
+                results.append({"record_id": record_id, "success": True})
+                success_count += 1
+            else:
+                results.append({"record_id": record_id, "success": False, "error": result.error_message})
+                fail_count += 1
+        except Exception as e:
+            results.append({"record_id": record_id, "success": False, "error": str(e)})
+            fail_count += 1
+
+    return jsonify({
+        "success_count": success_count,
+        "fail_count": fail_count,
+        "results": results,
+    })
+
+
 # ---------- Admin API ----------
 
 @app.route("/api/admin/users", methods=["GET"])
@@ -504,7 +634,7 @@ def api_admin_audit():
 def create_parser() -> argparse.ArgumentParser:
     """创建命令行解析器"""
     parser = argparse.ArgumentParser(
-        description="统一 DNS 管理 Web UI v2.0.0",
+        description="统一 DNS 管理 Web UI v2.1.0",
     )
     parser.add_argument(
         "--host", default="127.0.0.1",
@@ -563,7 +693,7 @@ def main():
     # 初始化数据库（建表 + 种子 admin）
     init_db(app)
 
-    print(f"启动 DNS Web UI v2.0.0: http://{args.host}:{args.port}")
+    print(f"启动 DNS Web UI v2.1.0: http://{args.host}:{args.port}")
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 
