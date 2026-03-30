@@ -250,6 +250,7 @@ python3 dns_web.py --env-file /path/to/credentials.env
 - **域名检测** — 输入域名后自动识别托管平台（阿里云/Cloudflare/AWS/CDNetworks）
 - **记录列表** — 表格展示所有解析记录，支持按类型、主机记录过滤
 - **添加/编辑/删除记录** — 基于角色权限控制，viewer 隐藏写操作按钮
+- **批量操作** — 支持批量修改 TTL、批量切换 Status、批量删除（v2.1.0）
 - **用户管理** — admin 可创建/编辑/删除用户，分配角色和域名权限
 - **审计日志** — admin 可查询所有写操作记录，支持按用户/域名/时间过滤
 
@@ -264,6 +265,8 @@ python3 dns_web.py --env-file /path/to/credentials.env
 | `POST` | `/api/records/<domain>` | 添加记录 | admin/operator + 域名权限 |
 | `PUT` | `/api/records/<domain>` | 更新记录 | admin/operator + 域名权限 |
 | `DELETE` | `/api/records/<domain>` | 删除记录 | admin/operator + 域名权限 |
+| `PUT` | `/api/batch/<domain>` | 批量更新（TTL/Status） | admin/operator + 域名权限 |
+| `DELETE` | `/api/batch/<domain>` | 批量删除 | admin/operator + 域名权限 |
 | `GET` | `/api/admin/users` | 用户列表 | admin |
 | `POST` | `/api/admin/users` | 创建用户 | admin |
 | `PUT` | `/api/admin/users/<id>` | 编辑用户 | admin |
@@ -344,7 +347,7 @@ sudo cloudflared service install
 ```
 unified-dns-manager/
 ├── dns_cli.py                     # CLI 入口 (v1.1.0)
-├── dns_web.py                     # Web UI 入口 (v2.0.0)
+├── dns_web.py                     # Web UI 入口 (v2.1.0)
 ├── requirements.txt               # Python 依赖
 ├── README.md
 ├── templates/
@@ -396,6 +399,7 @@ unified-dns-manager/
 
 ## 版本历史
 
+- **v2.1.0** — 批量操作：批量修改 TTL、批量修改 Status（阿里云）、批量删除；前端新增 checkbox 选择 + 批量操作工具栏
 - **v2.0.0** — 用户管理 + RBAC（角色 + 域名权限）+ 写操作审计日志；认证委托 CF Access + Auth0；Web UI 新增 admin 面板（用户管理 + 审计查询）；Bearer Token 向后兼容 CLI/自动化
 - **v1.1.0** — 新增 Web UI（Flask + REST API），支持浏览器操作 DNS 记录 CRUD，Bearer Token 认证
 - **v1.0.1** — 新增 `dns_api.py` facade 供外部项目 import 调用；CLI 自动加载默认 env 文件
