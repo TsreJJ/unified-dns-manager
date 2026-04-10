@@ -115,7 +115,7 @@ def _validate_cf_jwt(token: str) -> dict | None:
                 signing_key.key,
                 algorithms=["RS256"],
                 audience=audience,
-                options={"require": ["exp", "iat", "email"]},
+                options={"require": ["exp", "iat"]},
             )
             return payload
         except jwt.ExpiredSignatureError:
@@ -164,31 +164,42 @@ def require_auth(f):
             payload = _validate_cf_jwt(cf_jwt)
             if payload:
                 email = payload.get("email", "").lower()
-                if not email:
-                    return jsonify({"error": "JWT 中缺少 email"}), 401
+                common_name = payload.get("common_name", "")
 
-                db = get_db()
-                user = db.execute(
-                    "SELECT id, email, role, display_name, is_active FROM users WHERE email = ?",
-                    (email,),
-                ).fetchone()
+                # 1a: 用户 JWT（有 email）
+                if email:
+                    db = get_db()
+                    user = db.execute(
+                        "SELECT id, email, role, display_name, is_active FROM users WHERE email = ?",
+                        (email,),
+                    ).fetchone()
 
-                if not user:
-                    return jsonify({"error": f"用户 {email} 未授权，请联系管理员"}), 403
-                if not user["is_active"]:
-                    return jsonify({"error": f"用户 {email} 已被停用"}), 403
+                    if not user:
+                        return jsonify({"error": f"用户 {email} 未授权，请联系管理员"}), 403
+                    if not user["is_active"]:
+                        return jsonify({"error": f"用户 {email} 已被停用"}), 403
 
-                g.user_id = user["id"]
-                g.user_email = user["email"]
-                g.user_role = user["role"]
-                g.user_display_name = user["display_name"]
-                g.auth_method = "cf_access"
-                g.client_ip = _get_client_ip()
-                return f(*args, **kwargs)
-            # JWT 存在但验证失败
-            return jsonify({"error": "CF Access JWT 验证失败"}), 401
+                    g.user_id = user["id"]
+                    g.user_email = user["email"]
+                    g.user_role = user["role"]
+                    g.user_display_name = user["display_name"]
+                    g.auth_method = "cf_access"
+                    g.client_ip = _get_client_ip()
+                    return f(*args, **kwargs)
 
-        # 模式 2: Bearer Token (Legacy CLI/自动化)
+                # 1b: Service Token JWT（无 email，有 common_name）
+                if common_name:
+                    g.user_id = 0
+                    g.user_email = f"service-token@{common_name[:8]}"
+                    g.user_role = "admin"
+                    g.user_display_name = f"Service Token ({common_name})"
+                    g.auth_method = "service_token"
+                    g.client_ip = _get_client_ip()
+                    return f(*args, **kwargs)
+
+            # JWT 验证失败 → fallthrough 到 Bearer Token
+
+        # 模式 2: Bearer Token (CLI/自动化)
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
